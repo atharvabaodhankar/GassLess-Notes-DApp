@@ -1,21 +1,15 @@
 {
   "name": "gasless-notes-app",
   "version": "1.0.0",
-  "description": "Gasless Notes App using ERC-4337 Account Abstraction",
+  "description": "Gasless Notes App using Firebase + ERC-4337 Account Abstraction",
   "scripts": {
-    "install:all": "npm run install:frontend && npm run install:backend && npm run install:hardhat",
     "install:frontend": "cd frontend && npm install",
-    "install:backend": "cd backend && npm install", 
     "install:hardhat": "cd hardhat && npm install",
-    "dev:frontend": "cd frontend && npm run dev",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:hardhat": "cd hardhat && npm run node",
-    "deploy:local": "cd hardhat && npm run deploy:local",
-    "deploy:sepolia": "cd hardhat && npm run deploy:sepolia",
-    "build:frontend": "cd frontend && npm run build",
-    "start:backend": "cd backend && npm start"
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "deploy:contracts": "cd hardhat && npm run deploy:local"
   },
-  "keywords": ["erc-4337", "account-abstraction", "gasless", "blockchain", "notes"],
+  "keywords": ["firebase", "erc-4337", "account-abstraction", "gasless", "blockchain", "notes"],
   "author": "",
   "license": "MIT"
 }

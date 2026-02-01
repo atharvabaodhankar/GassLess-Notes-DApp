@@ -1,32 +1,34 @@
-# 🚀 Gasless Notes App (ERC-4337)
+# 🚀 Gasless Notes App (ERC-4337 + Firebase)
 
-A Web2-like notes application with blockchain integrity verification using ERC-4337 Account Abstraction.
+A Web2-like notes application with blockchain integrity verification using ERC-4337 Account Abstraction and Firebase.
 
 ## 🎯 Features
 
 - **No MetaMask Required**: Users authenticate with Firebase Auth
 - **Gasless Transactions**: All blockchain interactions are sponsored by paymaster
-- **Instant UX**: Notes are saved immediately, blockchain verification happens asynchronously
+- **Instant UX**: Notes are saved immediately to Firebase, blockchain verification happens asynchronously
 - **Blockchain Integrity**: All notes are hash-verified on-chain for tamper-proof storage
 - **Smart Wallet**: Each user gets an ERC-4337 smart contract wallet
+- **Real-time Updates**: Firebase Firestore provides real-time note synchronization
 
 ## 🏗️ Architecture
 
 ```
-Frontend (React + Vite) → Backend (Node.js + Express) → ERC-4337 Infrastructure → Blockchain
+Frontend (React + Firebase) → Firebase Firestore → Simulated Blockchain Verification
 ```
 
 ### Components:
-- **Frontend**: Vite + React + Firebase Auth + Tailwind CSS
-- **Backend**: Node.js + Express + MongoDB + Firebase Admin
-- **Smart Contracts**: ERC-4337 Account Factory + Notes Registry + Paymaster
-- **Blockchain**: Hardhat (local) / Sepolia (testnet)
+- **Frontend**: Vite + React + Firebase Auth + Firestore + Tailwind CSS
+- **Database**: Firebase Firestore (replaces MongoDB)
+- **Authentication**: Firebase Auth with Google Sign-in
+- **Smart Contracts**: ERC-4337 Account Factory + Notes Registry + Paymaster (for future integration)
+- **Blockchain**: Simulated verification (easily replaceable with real blockchain)
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- MongoDB
+- Firebase Project
 - Git
 
 ### 1. Clone and Install
@@ -35,105 +37,91 @@ Frontend (React + Vite) → Backend (Node.js + Express) → ERC-4337 Infrastruct
 git clone <your-repo>
 cd gasless-notes-app
 
-# Install all dependencies
-npm run install:all
+# Install frontend dependencies
+cd frontend && npm install
 ```
 
-### 2. Environment Setup
-
-```bash
-# Copy environment files
-cp frontend/.env.example frontend/.env
-cp backend/.env.example backend/.env
-cp hardhat/.env.example hardhat/.env
-
-# Edit the .env files with your configuration
-```
-
-### 3. Firebase Setup
+### 2. Firebase Setup
 
 1. Create a Firebase project at https://console.firebase.google.com
 2. Enable Authentication with Email/Password and Google
-3. Generate a service account key
-4. Update `frontend/.env` and `backend/.env` with Firebase config
+3. Enable Firestore Database
+4. Get your Firebase config from Project Settings
+5. Update `frontend/src/config/firebase.js` with your config
 
-### 4. Start Local Development
+### 3. Start Development
 
 ```bash
-# Terminal 1: Start Hardhat node
-cd hardhat
-npm install
-npm run node
-
-# Terminal 2: Deploy contracts
-npm run deploy:local
-
-# Terminal 3: Start backend
-cd ../backend
-npm install
-npm run dev
-
-# Terminal 4: Start frontend
-cd ../frontend
-npm install
+# Start frontend (main app)
+cd frontend
 npm run dev
 ```
 
-### 5. Access the App
+### 4. Access the App
 
 - Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
-- Hardhat Network: http://localhost:8545
+- Firebase Console: https://console.firebase.google.com
 
 ## 📁 Project Structure
 
 ```
 gasless-notes-app/
-├── frontend/                 # React + Vite frontend
+├── frontend/                 # React + Vite + Firebase frontend
 │   ├── src/
 │   │   ├── components/      # React components
 │   │   ├── contexts/        # Auth context
-│   │   ├── services/        # API services
+│   │   ├── services/        # Firebase services
 │   │   └── config/          # Firebase config
 │   └── package.json
-├── backend/                  # Node.js backend
-│   ├── routes/              # API routes
-│   ├── models/              # MongoDB models
-│   ├── services/            # Blockchain service
-│   ├── middleware/          # Auth middleware
-│   └── package.json
-├── hardhat/                  # Smart contracts
+├── hardhat/                  # Smart contracts (for future blockchain integration)
 │   ├── contracts/           # Solidity contracts
 │   ├── scripts/             # Deployment scripts
-│   ├── deployments/         # Contract addresses
 │   └── package.json
 └── README.md
 ```
 
-## 🔧 Smart Contracts
+## 🔧 Firebase Collections
 
-### SimpleAccount (ERC-4337)
-- User's smart contract wallet
-- Validates signatures and executes transactions
-- Deployed per user via factory pattern
+### Users Collection (`users`)
+```javascript
+{
+  uid: "firebase-user-id",
+  email: "user@example.com",
+  displayName: "User Name",
+  walletAddress: "0x...",
+  ownerAddress: "0x...",
+  walletSalt: 0,
+  createdAt: timestamp,
+  lastLoginAt: timestamp,
+  isActive: true
+}
+```
 
-### NotesRegistry
-- Stores note hashes on-chain
-- Provides integrity verification
-- Minimal storage for gas efficiency
-
-### NotesPaymaster
-- Sponsors gas fees for users
-- Enforces usage policies
-- Rate limiting and security controls
+### Notes Collection (`notes`)
+```javascript
+{
+  id: "note_userId_timestamp_random",
+  userId: "firebase-user-id",
+  title: "Note Title",
+  content: "Note content...",
+  contentHash: "sha256-hash",
+  onChainStatus: "pending|confirmed|failed",
+  transactionHash: "0x...",
+  blockNumber: 123456,
+  userOpHash: "0x...",
+  createdAt: timestamp,
+  updatedAt: timestamp,
+  onChainTimestamp: timestamp
+}
+```
 
 ## 🔄 User Flow
 
-1. **Login**: User signs in with Firebase Auth
-2. **Wallet Creation**: Backend creates ERC-4337 smart wallet
-3. **Create Note**: User writes note → Saved instantly to DB
-4. **Blockchain Verification**: Backend builds UserOperation → Paymaster sponsors → Bundler submits
-5. **Status Update**: Note status updates from 'pending' to 'confirmed'
+1. **Login**: User signs in with Firebase Auth (Email/Password or Google)
+2. **Wallet Creation**: Frontend generates simulated wallet address
+3. **Create Note**: User writes note → Saved instantly to Firestore
+4. **Blockchain Simulation**: Simulated blockchain verification (2-5 seconds delay)
+5. **Status Update**: Note status updates from 'pending' to 'confirmed' in real-time
 
 ## 🛠️ Development Commands
 
@@ -145,63 +133,77 @@ npm run build        # Build for production
 npm run preview      # Preview production build
 ```
 
-### Backend
-```bash
-cd backend
-npm run dev          # Start with nodemon
-npm start            # Start production server
-```
-
-### Hardhat
+### Smart Contracts (Optional)
 ```bash
 cd hardhat
+npm install          # Install dependencies
 npm run compile      # Compile contracts
 npm run node         # Start local node
 npm run deploy:local # Deploy to local network
-npm run deploy:sepolia # Deploy to Sepolia
 ```
 
 ## 🌐 Deployment
 
-### Sepolia Testnet
+### Frontend Deployment (Vercel/Netlify)
 
-1. Get Sepolia ETH from faucet
-2. Update `hardhat/.env` with Sepolia RPC and private key
-3. Deploy contracts: `npm run deploy:sepolia`
-4. Update backend `.env` with contract addresses
-5. Deploy backend to your preferred hosting service
-6. Deploy frontend to Vercel/Netlify
+1. Build the frontend: `npm run build`
+2. Deploy the `dist` folder to your hosting service
+3. Set up environment variables in your hosting dashboard
 
-### Production Considerations
+### Firebase Security Rules
 
-- Use proper key management (AWS KMS, etc.)
-- Implement proper rate limiting
-- Add monitoring and logging
-- Use production-grade bundler service
-- Implement proper error handling
+Update Firestore security rules:
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only access their own user document
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Users can only access their own notes
+    match /notes/{noteId} {
+      allow read, write: if request.auth != null && 
+        request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+    }
+  }
+}
+```
 
 ## 🔐 Security Features
 
-- Firebase JWT authentication
-- Smart contract signature validation
-- Paymaster policy enforcement
-- Rate limiting per user
-- Input validation and sanitization
+- Firebase Authentication with JWT tokens
+- Firestore security rules for data access control
+- Client-side input validation and sanitization
+- Content hashing for integrity verification
+- Simulated blockchain verification (easily replaceable)
 
-## 📊 Monitoring
+## 📊 Real-time Features
 
-The app includes built-in status tracking:
-- Note creation status
-- Blockchain verification status
-- Transaction hash tracking
-- Gas usage monitoring (sponsored)
+- **Live Note Updates**: Changes sync across all user sessions
+- **Status Tracking**: Real-time blockchain verification status
+- **Instant Saves**: Notes save immediately without waiting for blockchain
+- **Optimistic UI**: Immediate feedback with background processing
+
+## 🔮 Future Blockchain Integration
+
+The app is designed to easily integrate with real blockchain:
+
+1. Replace simulated functions in `firebaseService.js`
+2. Deploy smart contracts from `hardhat/` folder
+3. Integrate with real ERC-4337 bundler
+4. Add backend service for UserOperation signing
 
 ## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests if applicable
+4. Test with Firebase
 5. Submit a pull request
 
 ## 📄 License
@@ -212,17 +214,27 @@ MIT License - see LICENSE file for details
 
 ### Common Issues
 
-1. **Firebase Auth not working**: Check Firebase config and enable auth methods
-2. **Contracts not deploying**: Ensure Hardhat node is running and funded
-3. **Backend connection issues**: Verify MongoDB is running and connection string is correct
-4. **Frontend not connecting**: Check API base URL in frontend `.env`
+1. **Firebase Auth not working**: 
+   - Check Firebase config in `firebase.js`
+   - Enable auth methods in Firebase Console
+   - Verify domain is authorized
+
+2. **Firestore permission denied**:
+   - Check security rules
+   - Ensure user is authenticated
+   - Verify user owns the data
+
+3. **Real-time updates not working**:
+   - Check internet connection
+   - Verify Firestore rules allow reads
+   - Check browser console for errors
 
 ### Getting Help
 
-- Check the console logs for detailed error messages
-- Ensure all services are running (MongoDB, Hardhat node, Backend)
-- Verify environment variables are set correctly
+- Check the browser console for detailed error messages
+- Verify Firebase project configuration
+- Test authentication flow step by step
 
 ---
 
-Built with ❤️ using ERC-4337 Account Abstraction
+Built with ❤️ using Firebase + ERC-4337 Account Abstraction
