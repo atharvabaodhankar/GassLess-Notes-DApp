@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { notesAPI, walletAPI } from '../services/api'
+import { notesService, walletService } from '../services/firebaseService'
 import { 
   Plus, 
   FileText, 
@@ -10,7 +10,8 @@ import {
   Clock, 
   XCircle,
   Edit3,
-  Trash2
+  Trash2,
+  Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -24,18 +25,25 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadDashboardData()
+    
+    // Set up real-time listener for notes
+    const unsubscribe = notesService.subscribeToNotes((updatedNotes) => {
+      setNotes(updatedNotes)
+    })
+
+    return () => unsubscribe()
   }, [])
 
   const loadDashboardData = async () => {
     try {
       setLoading(true)
-      const [notesResponse, walletResponse] = await Promise.all([
-        notesAPI.getAll(),
-        walletAPI.getInfo()
+      const [notesData, walletData] = await Promise.all([
+        notesService.getNotes(),
+        walletService.getWalletInfo()
       ])
       
-      setNotes(notesResponse.data.notes)
-      setWalletInfo(walletResponse.data.wallet)
+      setNotes(notesData)
+      setWalletInfo(walletData)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
       toast.error('Failed to load data')
@@ -49,7 +57,7 @@ const Dashboard = () => {
       case 'confirmed':
         return <CheckCircle className="w-4 h-4 text-green-500" />
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500" />
+        return <Clock className="w-4 h-4 text-yellow-500 animate-pulse" />
       case 'failed':
         return <XCircle className="w-4 h-4 text-red-500" />
       default:
@@ -70,6 +78,36 @@ const Dashboard = () => {
     }
   }
 
+  const handleSaveNote = async (noteData) => {
+    try {
+      if (editingNote) {
+        await notesService.updateNote(editingNote.docId, noteData)
+        toast.success('Note updated successfully!')
+      } else {
+        await notesService.createNote(noteData)
+        toast.success('Note created successfully!')
+      }
+      
+      setShowCreateModal(false)
+      setEditingNote(null)
+    } catch (error) {
+      console.error('Failed to save note:', error)
+      toast.error('Failed to save note')
+    }
+  }
+
+  const handleDeleteNote = async (docId, title) => {
+    if (!confirm(`Are you sure you want to delete "${title}"?`)) return
+    
+    try {
+      await notesService.deleteNote(docId)
+      toast.success('Note deleted successfully!')
+    } catch (error) {
+      console.error('Failed to delete note:', error)
+      toast.error('Failed to delete note')
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -86,9 +124,15 @@ const Dashboard = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <h1 className="text-2xl font-bold text-gray-900">Gasless Notes</h1>
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                ERC-4337
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                  ERC-4337
+                </span>
+                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full flex items-center space-x-1">
+                  <Zap className="w-3 h-3" />
+                  <span>Firebase</span>
+                </span>
+              </div>
             </div>
             
             <div className="flex items-center space-x-4">
@@ -97,6 +141,10 @@ const Dashboard = () => {
                 <span className="font-mono">
                   {walletInfo?.address?.slice(0, 6)}...{walletInfo?.address?.slice(-4)}
                 </span>
+              </div>
+              
+              <div className="text-sm text-gray-600">
+                {user?.displayName || user?.email?.split('@')[0]}
               </div>
               
               <button
@@ -116,12 +164,12 @@ const Dashboard = () => {
         {/* Welcome Section */}
         <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white mb-8">
           <h2 className="text-2xl font-bold mb-2">
-            Welcome back, {user?.email?.split('@')[0]}!
+            Welcome back, {user?.displayName || user?.email?.split('@')[0]}!
           </h2>
           <p className="text-blue-100 mb-4">
-            Create notes instantly with blockchain integrity verification
+            Create notes instantly with blockchain integrity verification - powered by Firebase & ERC-4337
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             <div className="bg-white/10 rounded-lg p-3">
               <div className="font-semibold">Total Notes</div>
               <div className="text-2xl font-bold">{notes.length}</div>
@@ -130,6 +178,12 @@ const Dashboard = () => {
               <div className="font-semibold">Verified</div>
               <div className="text-2xl font-bold">
                 {notes.filter(n => n.onChainStatus === 'confirmed').length}
+              </div>
+            </div>
+            <div className="bg-white/10 rounded-lg p-3">
+              <div className="font-semibold">Pending</div>
+              <div className="text-2xl font-bold">
+                {notes.filter(n => n.onChainStatus === 'pending').length}
               </div>
             </div>
             <div className="bg-white/10 rounded-lg p-3">
@@ -156,7 +210,7 @@ const Dashboard = () => {
           <div className="text-center py-12">
             <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-            <p className="text-gray-500 mb-4">Create your first note to get started</p>
+            <p className="text-gray-500 mb-4">Create your first note to get started with gasless blockchain verification</p>
             <button
               onClick={() => setShowCreateModal(true)}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
@@ -167,7 +221,7 @@ const Dashboard = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {notes.map((note) => (
-              <div key={note.id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
+              <div key={note.docId} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-3">
                   <h4 className="font-semibold text-gray-900 truncate flex-1">
                     {note.title}
@@ -180,7 +234,7 @@ const Dashboard = () => {
                       <Edit3 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDeleteNote(note.id)}
+                      onClick={() => handleDeleteNote(note.docId, note.title)}
                       className="text-gray-400 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -192,13 +246,24 @@ const Dashboard = () => {
                   {note.content}
                 </p>
                 
-                <div className="flex items-center justify-between text-xs text-gray-500">
-                  <span>{new Date(note.createdAt).toLocaleDateString()}</span>
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                  <span>
+                    {note.createdAt?.toDate ? 
+                      note.createdAt.toDate().toLocaleDateString() : 
+                      'Just now'
+                    }
+                  </span>
                   <div className="flex items-center space-x-1" title={getStatusText(note.onChainStatus)}>
                     {getStatusIcon(note.onChainStatus)}
                     <span className="capitalize">{note.onChainStatus}</span>
                   </div>
                 </div>
+                
+                {note.transactionHash && (
+                  <div className="text-xs text-gray-400 font-mono truncate">
+                    Tx: {note.transactionHash}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -218,38 +283,6 @@ const Dashboard = () => {
       )}
     </div>
   )
-
-  async function handleSaveNote(noteData) {
-    try {
-      if (editingNote) {
-        await notesAPI.update(editingNote.id, noteData)
-        toast.success('Note updated successfully!')
-      } else {
-        await notesAPI.create(noteData)
-        toast.success('Note created successfully!')
-      }
-      
-      setShowCreateModal(false)
-      setEditingNote(null)
-      loadDashboardData()
-    } catch (error) {
-      console.error('Failed to save note:', error)
-      toast.error('Failed to save note')
-    }
-  }
-
-  async function handleDeleteNote(noteId) {
-    if (!confirm('Are you sure you want to delete this note?')) return
-    
-    try {
-      await notesAPI.delete(noteId)
-      toast.success('Note deleted successfully!')
-      loadDashboardData()
-    } catch (error) {
-      console.error('Failed to delete note:', error)
-      toast.error('Failed to delete note')
-    }
-  }
 }
 
 // Note Modal Component
@@ -277,6 +310,9 @@ const NoteModal = ({ note, onClose, onSave }) => {
           <h3 className="text-lg font-semibold">
             {note ? 'Edit Note' : 'Create New Note'}
           </h3>
+          <p className="text-sm text-gray-600 mt-1">
+            Your note will be saved instantly and verified on blockchain automatically
+          </p>
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -308,6 +344,16 @@ const NoteModal = ({ note, onClose, onSave }) => {
               maxLength={10000}
               required
             />
+          </div>
+          
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <div className="flex items-center space-x-2 text-sm text-blue-800">
+              <Zap className="w-4 h-4" />
+              <span className="font-medium">Gasless & Instant</span>
+            </div>
+            <p className="text-xs text-blue-700 mt-1">
+              No gas fees • Instant save • Blockchain verification in background
+            </p>
           </div>
           
           <div className="flex justify-end space-x-3 pt-4">
