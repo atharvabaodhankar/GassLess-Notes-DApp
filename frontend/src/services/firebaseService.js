@@ -3,6 +3,7 @@ import {
   doc, 
   addDoc, 
   updateDoc, 
+  setDoc,
   deleteDoc, 
   getDocs, 
   getDoc,
@@ -32,15 +33,17 @@ export const userService = {
         // Create new user with wallet info
         const walletInfo = await generateWalletInfo(auth.currentUser.uid);
         
-        await updateDoc(userRef, {
+        const newUserData = {
           ...userData,
           ...walletInfo,
           createdAt: serverTimestamp(),
           lastLoginAt: serverTimestamp(),
           isActive: true
-        }, { merge: true });
+        };
         
-        return { ...userData, ...walletInfo, isNew: true };
+        await setDoc(userRef, newUserData);
+        
+        return { ...newUserData, isNew: true };
       } else {
         // Update existing user
         await updateDoc(userRef, {
@@ -112,10 +115,11 @@ export const notesService = {
   async getNotes(limitCount = 50) {
     try {
       const userId = auth.currentUser.uid;
+      
+      // Simplified query to avoid index issues
       const q = query(
         collection(db, NOTES_COLLECTION),
         where('userId', '==', userId),
-        orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
       
@@ -123,10 +127,18 @@ export const notesService = {
       const notes = [];
       
       querySnapshot.forEach((doc) => {
+        const data = doc.data();
         notes.push({
           docId: doc.id,
-          ...doc.data()
+          ...data
         });
+      });
+      
+      // Sort by createdAt on client side to avoid index requirement
+      notes.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(0);
+        const bTime = b.createdAt?.toDate?.() || new Date(0);
+        return bTime - aTime;
       });
       
       return notes;
@@ -203,21 +215,34 @@ export const notesService = {
   // Listen to notes changes in real-time
   subscribeToNotes(callback) {
     const userId = auth.currentUser.uid;
+    
+    // Simplified query without orderBy to avoid index requirement
     const q = query(
       collection(db, NOTES_COLLECTION),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     
     return onSnapshot(q, (querySnapshot) => {
       const notes = [];
       querySnapshot.forEach((doc) => {
+        const data = doc.data();
         notes.push({
           docId: doc.id,
-          ...doc.data()
+          ...data
         });
       });
+      
+      // Sort by createdAt on client side
+      notes.sort((a, b) => {
+        const aTime = a.createdAt?.toDate?.() || new Date(0);
+        const bTime = b.createdAt?.toDate?.() || new Date(0);
+        return bTime - aTime;
+      });
+      
       callback(notes);
+    }, (error) => {
+      console.error('Error in notes subscription:', error);
+      callback([]); // Return empty array on error
     });
   }
 };
@@ -244,11 +269,11 @@ export const walletService = {
   async getTransactions() {
     try {
       const userId = auth.currentUser.uid;
+      
+      // Simplified query to get all user notes first
       const q = query(
         collection(db, NOTES_COLLECTION),
-        where('userId', '==', userId),
-        where('transactionHash', '!=', null),
-        orderBy('onChainTimestamp', 'desc')
+        where('userId', '==', userId)
       );
       
       const querySnapshot = await getDocs(q);
@@ -256,16 +281,26 @@ export const walletService = {
       
       querySnapshot.forEach((doc) => {
         const data = doc.data();
-        transactions.push({
-          noteId: data.id,
-          noteTitle: data.title,
-          transactionHash: data.transactionHash,
-          userOpHash: data.userOpHash,
-          blockNumber: data.blockNumber,
-          status: data.onChainStatus,
-          timestamp: data.onChainTimestamp,
-          type: 'note_registration'
-        });
+        // Only include notes that have transaction hashes
+        if (data.transactionHash) {
+          transactions.push({
+            noteId: data.id,
+            noteTitle: data.title,
+            transactionHash: data.transactionHash,
+            userOpHash: data.userOpHash,
+            blockNumber: data.blockNumber,
+            status: data.onChainStatus,
+            timestamp: data.onChainTimestamp,
+            type: 'note_registration'
+          });
+        }
+      });
+      
+      // Sort by timestamp on client side
+      transactions.sort((a, b) => {
+        const aTime = a.timestamp?.toDate?.() || new Date(0);
+        const bTime = b.timestamp?.toDate?.() || new Date(0);
+        return bTime - aTime;
       });
       
       return transactions;
