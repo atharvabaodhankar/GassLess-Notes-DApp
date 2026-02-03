@@ -1,18 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { notesService, walletService } from '../services/firebaseService'
-import { 
-  Plus, 
-  FileText, 
-  Wallet, 
-  LogOut, 
-  CheckCircle, 
-  Clock, 
-  XCircle,
-  Edit3,
-  Trash2,
-  Zap
-} from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const Dashboard = () => {
@@ -55,26 +43,26 @@ const Dashboard = () => {
   const getStatusIcon = (status) => {
     switch (status) {
       case 'confirmed':
-        return <CheckCircle className="w-4 h-4 text-green-500" />
+        return 'check_circle'
       case 'pending':
-        return <Clock className="w-4 h-4 text-yellow-500 animate-pulse" />
+        return 'schedule'
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />
+        return 'error'
       default:
-        return <Clock className="w-4 h-4 text-gray-400" />
+        return 'schedule'
     }
   }
 
-  const getStatusText = (status) => {
+  const getStatusColor = (status) => {
     switch (status) {
       case 'confirmed':
-        return 'Verified on blockchain'
+        return 'text-brand-accent-green bg-brand-accent-green/10'
       case 'pending':
-        return 'Blockchain verification pending'
+        return 'text-yellow-500 bg-yellow-500/10'
       case 'failed':
-        return 'Blockchain verification failed'
+        return 'text-red-400 bg-red-400/10'
       default:
-        return 'Unknown status'
+        return 'text-brand-text-secondary bg-brand-surface'
     }
   }
 
@@ -108,167 +96,229 @@ const Dashboard = () => {
     }
   }
 
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+    toast.success('Copied to clipboard!')
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-brand-bg flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-accent-blue"></div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-brand-bg">
+      {/* Navigation */}
+      <nav className="border-b border-brand-border bg-brand-bg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <h1 className="text-2xl font-bold text-gray-900">Gasless Notes</h1>
-              <div className="flex items-center space-x-2">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+          <div className="flex justify-between h-16 items-center">
+            <div className="flex items-center space-x-6">
+              <span className="text-lg font-semibold tracking-tight text-brand-text-primary">
+                Gasless Notes
+              </span>
+              <div className="hidden sm:flex items-center space-x-3">
+                <span className="px-2.5 py-0.5 bg-brand-surface text-brand-text-secondary text-[10px] font-medium rounded border border-brand-border uppercase tracking-widest">
                   ERC-4337
                 </span>
-                <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full flex items-center space-x-1">
-                  <Zap className="w-3 h-3" />
-                  <span>Firebase</span>
+                <span className="px-2.5 py-0.5 bg-brand-surface text-brand-accent-green text-[10px] font-medium rounded border border-brand-border flex items-center gap-1.5 uppercase tracking-widest">
+                  <span className="w-1 h-1 rounded-full bg-brand-accent-green"></span>
+                  Firebase Live
                 </span>
               </div>
             </div>
             
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Wallet className="w-4 h-4" />
-                <span className="font-mono">
+            <div className="flex items-center space-x-6">
+              <div className="hidden md:flex flex-col items-end">
+                <span className="text-xs font-mono text-brand-text-secondary bg-brand-surface px-2 py-0.5 rounded">
                   {walletInfo?.address?.slice(0, 6)}...{walletInfo?.address?.slice(-4)}
                 </span>
               </div>
               
-              <div className="text-sm text-gray-600">
-                {user?.displayName || user?.email?.split('@')[0]}
-              </div>
-              
               <button
                 onClick={logout}
-                className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="flex items-center text-brand-text-secondary hover:text-brand-text-primary transition-colors text-sm font-medium gap-2"
               >
-                <LogOut className="w-4 h-4" />
-                <span>Logout</span>
+                <span className="material-symbols-outlined text-[20px]">logout</span>
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </div>
           </div>
         </div>
-      </header>
+      </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white mb-8">
-          <h2 className="text-2xl font-bold mb-2">
-            Welcome back, {user?.displayName || user?.email?.split('@')[0]}!
-          </h2>
-          <p className="text-blue-100 mb-4">
-            Create notes instantly with blockchain integrity verification - powered by Firebase & ERC-4337
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {/* Header */}
+        <div className="mb-10">
+          <h1 className="text-2xl font-medium mb-1.5 text-brand-text-primary">
+            Dashboard Overview
+          </h1>
+          <p className="text-brand-text-secondary text-sm">
+            Blockchain-verified notes with gasless execution via account abstraction.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-            <div className="bg-white/10 rounded-lg p-3">
-              <div className="font-semibold">Total Notes</div>
-              <div className="text-2xl font-bold">{notes.length}</div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+              Total Notes
             </div>
-            <div className="bg-white/10 rounded-lg p-3">
-              <div className="font-semibold">Verified</div>
-              <div className="text-2xl font-bold">
-                {notes.filter(n => n.onChainStatus === 'confirmed').length}
-              </div>
+            <div className="text-2xl font-medium">{notes.length}</div>
+          </div>
+          
+          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+              Verified
             </div>
-            <div className="bg-white/10 rounded-lg p-3">
-              <div className="font-semibold">Pending</div>
-              <div className="text-2xl font-bold">
-                {notes.filter(n => n.onChainStatus === 'pending').length}
-              </div>
+            <div className="text-2xl font-medium text-brand-accent-green">
+              {notes.filter(n => n.onChainStatus === 'confirmed').length}
             </div>
-            <div className="bg-white/10 rounded-lg p-3">
-              <div className="font-semibold">Gas Fees Paid</div>
-              <div className="text-2xl font-bold">$0.00</div>
+          </div>
+          
+          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+              Pending
             </div>
+            <div className="text-2xl font-medium">
+              {notes.filter(n => n.onChainStatus === 'pending').length}
+            </div>
+          </div>
+          
+          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+              Gas Fees Paid
+            </div>
+            <div className="text-2xl font-medium">$0.00</div>
           </div>
         </div>
 
-        {/* Notes Section */}
-        <div className="flex justify-between items-center mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">Your Notes</h3>
+        {/* Notes Section Header */}
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-base font-medium flex items-center gap-3">
+            Your Notes
+            <span className="px-2 py-0.5 bg-brand-surface text-brand-text-secondary text-[11px] rounded font-mono">
+              {notes.length}
+            </span>
+          </h2>
+          
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="bg-brand-text-primary hover:bg-white text-brand-bg px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
           >
-            <Plus className="w-4 h-4" />
-            <span>Create Note</span>
+            <span className="material-symbols-outlined text-[18px]">add</span>
+            Create Note
           </button>
         </div>
 
         {/* Notes Grid */}
         {notes.length === 0 ? (
-          <div className="text-center py-12">
-            <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No notes yet</h3>
-            <p className="text-gray-500 mb-4">Create your first note to get started with gasless blockchain verification</p>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Create Your First Note
-            </button>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="border border-dashed border-brand-border rounded-lg flex items-center justify-center p-8 bg-transparent group hover:bg-brand-surface/50 transition-colors cursor-pointer"
+                 onClick={() => setShowCreateModal(true)}>
+              <div className="text-center">
+                <span className="material-symbols-outlined text-3xl text-brand-border mb-3 group-hover:text-brand-text-secondary transition-colors">
+                  post_add
+                </span>
+                <p className="text-sm font-medium text-brand-text-secondary">
+                  Ready for your first insight
+                </p>
+              </div>
+            </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {notes.map((note) => (
-              <div key={note.docId} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start mb-3">
-                  <h4 className="font-semibold text-gray-900 truncate flex-1">
-                    {note.title}
-                  </h4>
-                  <div className="flex items-center space-x-2 ml-2">
-                    <button
-                      onClick={() => setEditingNote(note)}
-                      className="text-gray-400 hover:text-blue-600 transition-colors"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteNote(note.docId, note.title)}
-                      className="text-gray-400 hover:text-red-600 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              <div key={note.docId} className="bg-brand-surface rounded-lg overflow-hidden group border border-transparent hover:border-brand-border transition-all">
+                <div className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-medium text-brand-text-primary">
+                      {note.title}
+                    </h3>
+                    <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => setEditingNote(note)}
+                        className="p-1.5 text-brand-text-secondary hover:text-brand-text-primary rounded transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteNote(note.docId, note.title)}
+                        className="p-1.5 text-brand-text-secondary hover:text-red-400 rounded transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-                
-                <p className="text-gray-600 text-sm mb-4 line-clamp-3">
-                  {note.content}
-                </p>
-                
-                <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                  <span>
-                    {note.createdAt?.toDate ? 
-                      note.createdAt.toDate().toLocaleDateString() : 
-                      'Just now'
-                    }
-                  </span>
-                  <div className="flex items-center space-x-1" title={getStatusText(note.onChainStatus)}>
-                    {getStatusIcon(note.onChainStatus)}
-                    <span className="capitalize">{note.onChainStatus}</span>
+                  
+                  <p className="text-brand-text-secondary text-sm mb-8 leading-relaxed line-clamp-3">
+                    {note.content}
+                  </p>
+                  
+                  <div className="pt-6 border-t border-brand-border flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center text-[11px] text-brand-text-secondary font-medium uppercase tracking-wider">
+                      <span className="material-symbols-outlined text-[14px] mr-1.5">calendar_today</span>
+                      {note.createdAt?.toDate ? 
+                        note.createdAt.toDate().toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          day: 'numeric', 
+                          year: 'numeric' 
+                        }).toUpperCase() : 
+                        'JUST NOW'
+                      }
+                    </div>
+                    
+                    <div className={`flex items-center gap-2 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${getStatusColor(note.onChainStatus)}`}>
+                      <span className="material-symbols-outlined text-[14px]">
+                        {getStatusIcon(note.onChainStatus)}
+                      </span>
+                      {note.onChainStatus}
+                    </div>
                   </div>
                 </div>
                 
                 {note.transactionHash && (
-                  <div className="text-xs text-gray-400 font-mono truncate">
-                    Tx: {note.transactionHash}
+                  <div className="px-6 py-3 bg-black/20 border-t border-brand-border flex items-center gap-3">
+                    <span className="text-[10px] font-mono uppercase text-brand-text-secondary font-bold shrink-0">
+                      TX ID
+                    </span>
+                    <span className="text-[11px] font-mono text-brand-text-secondary truncate">
+                      {note.transactionHash}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(note.transactionHash)}
+                      className="material-symbols-outlined text-[16px] text-brand-text-secondary hover:text-brand-text-primary ml-auto transition-colors"
+                    >
+                      content_copy
+                    </button>
                   </div>
                 )}
               </div>
             ))}
+            
+            {/* Add Note Card */}
+            <div className="border border-dashed border-brand-border rounded-lg flex items-center justify-center p-8 bg-transparent group hover:bg-brand-surface/50 transition-colors cursor-pointer"
+                 onClick={() => setShowCreateModal(true)}>
+              <div className="text-center">
+                <span className="material-symbols-outlined text-3xl text-brand-border mb-3 group-hover:text-brand-text-secondary transition-colors">
+                  post_add
+                </span>
+                <p className="text-sm font-medium text-brand-text-secondary">
+                  Ready for your next insight
+                </p>
+              </div>
+            </div>
           </div>
         )}
       </main>
+
+      {/* Settings Button */}
+      <button className="fixed bottom-6 right-6 p-3 bg-brand-surface border border-brand-border rounded-full hover:bg-brand-surface-hover transition-colors z-50">
+        <span className="material-symbols-outlined text-brand-text-primary">settings</span>
+      </button>
 
       {/* Create/Edit Note Modal */}
       {(showCreateModal || editingNote) && (
@@ -304,27 +354,27 @@ const NoteModal = ({ note, onClose, onSave }) => {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-        <div className="p-6 border-b">
-          <h3 className="text-lg font-semibold">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-brand-surface rounded-xl max-w-2xl w-full max-h-[90vh] overflow-hidden border border-brand-border">
+        <div className="p-6 border-b border-brand-border">
+          <h3 className="text-lg font-semibold text-brand-text-primary">
             {note ? 'Edit Note' : 'Create New Note'}
           </h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm text-brand-text-secondary mt-1">
             Your note will be saved instantly and verified on blockchain automatically
           </p>
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-brand-text-primary mb-2">
               Title
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-accent-blue focus:border-transparent text-brand-text-primary placeholder-brand-text-secondary"
               placeholder="Enter note title..."
               maxLength={200}
               required
@@ -332,13 +382,13 @@ const NoteModal = ({ note, onClose, onSave }) => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-brand-text-primary mb-2">
               Content
             </label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 bg-brand-bg border border-brand-border rounded-lg focus:ring-2 focus:ring-brand-accent-blue focus:border-transparent text-brand-text-primary placeholder-brand-text-secondary"
               rows={10}
               placeholder="Write your note content..."
               maxLength={10000}
@@ -346,12 +396,12 @@ const NoteModal = ({ note, onClose, onSave }) => {
             />
           </div>
           
-          <div className="bg-blue-50 p-3 rounded-lg">
-            <div className="flex items-center space-x-2 text-sm text-blue-800">
-              <Zap className="w-4 h-4" />
+          <div className="bg-brand-accent-green/10 p-3 rounded-lg border border-brand-accent-green/20">
+            <div className="flex items-center space-x-2 text-sm text-brand-accent-green">
+              <span className="material-symbols-outlined text-[16px]">bolt</span>
               <span className="font-medium">Gasless & Instant</span>
             </div>
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-xs text-brand-accent-green/80 mt-1">
               No gas fees • Instant save • Blockchain verification in background
             </p>
           </div>
@@ -360,14 +410,14 @@ const NoteModal = ({ note, onClose, onSave }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              className="px-4 py-2 text-brand-text-secondary hover:text-brand-text-primary transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving || !title.trim() || !content.trim()}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="bg-brand-text-primary text-brand-bg px-6 py-2 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {saving ? 'Saving...' : (note ? 'Update Note' : 'Create Note')}
             </button>
