@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
  * @title NotesRegistry
@@ -37,6 +37,8 @@ contract NotesRegistry is Ownable, ReentrancyGuard {
         bytes32 indexed newNoteHash,
         uint256 timestamp
     );
+
+    constructor(address initialOwner) Ownable(initialOwner) {}
 
     /**
      * @dev Register a new note on-chain

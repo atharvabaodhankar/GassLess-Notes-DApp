@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
 
 import "@account-abstraction/contracts/core/BaseAccount.sol";
 import "@account-abstraction/contracts/core/Helpers.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 import "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
@@ -54,8 +55,8 @@ contract SimpleAccount is BaseAccount, UUPSUpgradeable, Initializable {
      */
     function _validateSignature(UserOperation calldata userOp, bytes32 userOpHash)
     internal override virtual returns (uint256 validationData) {
-        bytes32 hash = userOpHash.toEthSignedMessageHash();
-        if (owner != hash.recover(userOp.signature))
+        bytes32 hash = MessageHashUtils.toEthSignedMessageHash(userOpHash);
+        if (owner != ECDSA.recover(hash, userOp.signature))
             return SIG_VALIDATION_FAILED;
         return 0;
     }

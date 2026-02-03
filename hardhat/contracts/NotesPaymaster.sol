@@ -1,137 +1,73 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.24;
 
-import "@account-abstraction/contracts/core/BasePaymaster.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@account-abstraction/contracts/interfaces/IPaymaster.sol";
+import "@account-abstraction/contracts/interfaces/IEntryPoint.sol";
 
 /**
  * @title NotesPaymaster
- * @dev Paymaster that sponsors gas for note operations
- * Only allows specific operations and enforces rate limits
+ * @dev Simple paymaster that sponsors gas for all operations
  */
-contract NotesPaymaster is BasePaymaster, Ownable {
+contract NotesPaymaster is IPaymaster {
     
-    // Rate limiting
-    mapping(address => uint256) public userLastTransaction;
-    mapping(address => uint256) public userTransactionCount;
-    
-    uint256 public constant RATE_LIMIT_DURATION = 1 minutes;
-    uint256 public constant MAX_TRANSACTIONS_PER_PERIOD = 10;
-    
-    // Allowed target contracts
-    mapping(address => bool) public allowedTargets;
-    
-    // Allowed function selectors
-    mapping(bytes4 => bool) public allowedSelectors;
+    IEntryPoint public immutable entryPoint;
+    address public paymasterOwner;
     
     event UserOperationSponsored(address indexed user, bytes32 indexed userOpHash);
-    event TargetAllowed(address indexed target, bool allowed);
-    event SelectorAllowed(bytes4 indexed selector, bool allowed);
 
-    constructor(IEntryPoint _entryPoint) BasePaymaster(_entryPoint) {}
-
-    /**
-     * @dev Add/remove allowed target contracts
-     */
-    function setAllowedTarget(address target, bool allowed) external onlyOwner {
-        allowedTargets[target] = allowed;
-        emit TargetAllowed(target, allowed);
+    modifier onlyPaymasterOwner() {
+        require(msg.sender == paymasterOwner, "Not paymaster owner");
+        _;
     }
 
-    /**
-     * @dev Add/remove allowed function selectors
-     */
-    function setAllowedSelector(bytes4 selector, bool allowed) external onlyOwner {
-        allowedSelectors[selector] = allowed;
-        emit SelectorAllowed(selector, allowed);
+    constructor(IEntryPoint _entryPoint) {
+        entryPoint = _entryPoint;
+        paymasterOwner = msg.sender;
     }
 
     /**
      * @dev Validate UserOperation and decide whether to sponsor
      */
-    function _validatePaymasterUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 maxCost)
-    internal override returns (bytes memory context, uint256 validationData) {
+    function validatePaymasterUserOp(UserOperation calldata userOp, bytes32 userOpHash, uint256 maxCost)
+    external override returns (bytes memory context, uint256 validationData) {
         
-        // Check rate limiting
-        address sender = userOp.sender;
-        uint256 currentTime = block.timestamp;
+        require(msg.sender == address(entryPoint), "Only EntryPoint");
         
-        if (currentTime - userLastTransaction[sender] > RATE_LIMIT_DURATION) {
-            // Reset counter if period passed
-            userTransactionCount[sender] = 0;
-        }
-        
-        require(userTransactionCount[sender] < MAX_TRANSACTIONS_PER_PERIOD, "Rate limit exceeded");
-        
-        // Decode the call data to check target and function
-        if (userOp.callData.length >= 4) {
-            bytes4 selector = bytes4(userOp.callData[:4]);
-            
-            // For execute calls, check the inner target and selector
-            if (selector == bytes4(keccak256("execute(address,uint256,bytes)"))) {
-                require(userOp.callData.length >= 68, "Invalid execute call");
-                
-                // Decode target address from execute call
-                address target;
-                assembly {
-                    target := mload(add(add(userOp.callData, 0x20), 0x04))
-                }
-                
-                require(allowedTargets[target], "Target not allowed");
-                
-                // Check inner function selector if there's call data
-                if (userOp.callData.length >= 100) {
-                    bytes4 innerSelector;
-                    assembly {
-                        innerSelector := mload(add(add(userOp.callData, 0x20), 0x44))
-                    }
-                    require(allowedSelectors[innerSelector], "Function not allowed");
-                }
-            } else {
-                require(allowedSelectors[selector], "Function not allowed");
-            }
-        }
-
+        // Simple validation - sponsor all operations
         // Check if we have enough deposit to cover the cost
-        require(paymasterIdBalanceOf(address(this)) >= maxCost, "Insufficient paymaster balance");
+        require(getDeposit() >= maxCost, "Insufficient paymaster balance");
+
+        emit UserOperationSponsored(userOp.sender, userOpHash);
 
         return ("", 0);
     }
 
     /**
-     * @dev Post-operation hook to update rate limiting
+     * @dev Post-operation hook
      */
-    function _postOp(PostOpMode mode, bytes calldata context, uint256 actualGasCost) internal override {
-        // Update rate limiting counters
-        // Note: We can't easily get the sender here, so we'll update in validatePaymasterUserOp
+    function postOp(PostOpMode mode, bytes calldata context, uint256 actualGasCost) external override {
+        require(msg.sender == address(entryPoint), "Only EntryPoint");
+        // Post-operation logic if needed
     }
 
     /**
-     * @dev Update rate limiting (called during validation)
+     * @dev Owner can fund the paymaster
      */
-    function _updateRateLimit(address sender) internal {
-        userLastTransaction[sender] = block.timestamp;
-        userTransactionCount[sender]++;
-    }
-
-    /**
-     * @dev Owner can deposit funds for gas sponsorship
-     */
-    function deposit() public payable {
+    function fundPaymaster() external payable onlyPaymasterOwner {
         entryPoint.depositTo{value: msg.value}(address(this));
     }
 
     /**
      * @dev Owner can withdraw funds
      */
-    function withdrawTo(address payable withdrawAddress, uint256 amount) public onlyOwner {
+    function withdrawFunds(address payable withdrawAddress, uint256 amount) external onlyPaymasterOwner {
         entryPoint.withdrawTo(withdrawAddress, amount);
     }
 
     /**
      * @dev Get current paymaster balance
      */
-    function getBalance() public view returns (uint256) {
+    function getDeposit() public view returns (uint256) {
         return entryPoint.balanceOf(address(this));
     }
 }
