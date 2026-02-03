@@ -3,10 +3,21 @@ const crypto = require('crypto');
 
 class BlockchainService {
   constructor() {
+    // Debug environment variables
+    console.log('🔍 Debug - Environment variables:');
+    console.log('RPC_URL:', process.env.RPC_URL ? 'Set' : 'Not set');
+    console.log('PRIVATE_KEY:', process.env.PRIVATE_KEY ? `Set (${process.env.PRIVATE_KEY.slice(0, 6)}...)` : 'Not set');
+    console.log('ENTRY_POINT_ADDRESS:', process.env.ENTRY_POINT_ADDRESS ? 'Set' : 'Not set');
+    
+    if (!process.env.RPC_URL || !process.env.PRIVATE_KEY) {
+      throw new Error('Missing required environment variables: RPC_URL or PRIVATE_KEY');
+    }
+    
+    // Initialize provider and wallet with Sepolia
     this.provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
     this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, this.provider);
     
-    // Contract addresses (loaded from environment)
+    // Contract addresses from deployment
     this.entryPointAddress = process.env.ENTRY_POINT_ADDRESS;
     this.accountFactoryAddress = process.env.ACCOUNT_FACTORY_ADDRESS;
     this.notesRegistryAddress = process.env.NOTES_REGISTRY_ADDRESS;
@@ -30,6 +41,11 @@ class BlockchainService {
       "function getNonce() view returns (uint256)"
     ];
 
+    this.entryPointABI = [
+      "function handleOps(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, uint256 callGasLimit, uint256 verificationGasLimit, uint256 preVerificationGas, uint256 maxFeePerGas, uint256 maxPriorityFeePerGas, bytes paymasterAndData, bytes signature)[] calldata ops, address payable beneficiary)",
+      "function getUserOpHash(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, uint256 callGasLimit, uint256 verificationGasLimit, uint256 preVerificationGas, uint256 maxFeePerGas, uint256 maxPriorityFeePerGas, bytes paymasterAndData, bytes signature) calldata userOp) view returns (bytes32)"
+    ];
+
     // Initialize contracts
     this.accountFactory = new ethers.Contract(
       this.accountFactoryAddress, 
@@ -42,6 +58,18 @@ class BlockchainService {
       this.notesRegistryABI, 
       this.wallet
     );
+
+    this.entryPoint = new ethers.Contract(
+      this.entryPointAddress,
+      this.entryPointABI,
+      this.wallet
+    );
+
+    console.log('🔗 BlockchainService initialized with Sepolia contracts');
+    console.log('📍 Network:', process.env.RPC_URL);
+    console.log('📍 EntryPoint:', this.entryPointAddress);
+    console.log('📍 NotesRegistry:', this.notesRegistryAddress);
+    console.log('📍 Paymaster:', this.paymasterAddress);
   }
 
   /**
@@ -49,11 +77,13 @@ class BlockchainService {
    */
   async getWalletAddress(userUid, salt = 0) {
     try {
-      // Use user UID as the owner (in practice, you'd derive a proper address)
+      // Create deterministic owner address from user UID
       const ownerAddress = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(userUid)).slice(0, 42);
       
       // Get counterfactual address
       const walletAddress = await this.accountFactory.getAddress(ownerAddress, salt);
+      
+      console.log(`👛 Wallet for user ${userUid}: ${walletAddress}`);
       
       return {
         walletAddress,
@@ -67,26 +97,69 @@ class BlockchainService {
   }
 
   /**
-   * Build UserOperation for note registration
+   * Register note on blockchain using direct contract call (simplified for now)
+   */
+  async registerNoteOnChain(noteId, noteHash, userUid) {
+    try {
+      console.log(`🔗 Registering note ${noteId} on Sepolia blockchain...`);
+      
+      // Convert to bytes32
+      const noteIdBytes32 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(noteId));
+      const noteHashBytes32 = '0x' + noteHash;
+      
+      // For now, register directly (later we'll use UserOperations)
+      const tx = await this.notesRegistry.registerNote(noteIdBytes32, noteHashBytes32, {
+        gasLimit: 200000,
+        maxFeePerGas: ethers.utils.parseUnits('20', 'gwei'),
+        maxPriorityFeePerGas: ethers.utils.parseUnits('2', 'gwei')
+      });
+      
+      console.log(`📝 Transaction sent: ${tx.hash}`);
+      
+      // Wait for confirmation
+      const receipt = await tx.wait();
+      
+      console.log(`✅ Note registered! Block: ${receipt.blockNumber}`);
+      
+      return {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber,
+        status: 'confirmed',
+        gasUsed: receipt.gasUsed.toString()
+      };
+      
+    } catch (error) {
+      console.error('Error registering note on chain:', error);
+      return {
+        status: 'failed',
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Build UserOperation for note registration (for future ERC-4337 integration)
    */
   async buildRegisterNoteUserOp(walletAddress, noteId, noteHash) {
     try {
+      console.log(`🔧 Building UserOperation for ${walletAddress}...`);
+      
       // Encode the registerNote call
-      const notesRegistryInterface = new ethers.utils.Interface(this.notesRegistryABI);
+      const notesRegistryInterface = new ethers.Interface(this.notesRegistryABI);
       const callData = notesRegistryInterface.encodeFunctionData('registerNote', [noteId, noteHash]);
       
       // Encode the execute call for the smart wallet
-      const accountInterface = new ethers.utils.Interface(this.simpleAccountABI);
+      const accountInterface = new ethers.Interface(this.simpleAccountABI);
       const executeCallData = accountInterface.encodeFunctionData('execute', [
         this.notesRegistryAddress,
         0, // value
         callData
       ]);
 
-      // Get nonce (simplified - in production, query the actual nonce)
-      const nonce = Date.now(); // Temporary nonce
+      // Get current nonce (simplified)
+      const nonce = Date.now();
 
-      // Build UserOperation
+      // Build UserOperation structure
       const userOp = {
         sender: walletAddress,
         nonce: ethers.utils.hexlify(nonce),
@@ -109,107 +182,7 @@ class BlockchainService {
   }
 
   /**
-   * Sign UserOperation (simplified version)
-   */
-  async signUserOperation(userOp, userUid) {
-    try {
-      // In production, this would be done client-side or with proper key management
-      // For demo purposes, we'll create a deterministic signature
-      
-      const userOpHash = this.getUserOperationHash(userOp);
-      const signature = await this.wallet.signMessage(ethers.utils.arrayify(userOpHash));
-      
-      return {
-        ...userOp,
-        signature
-      };
-    } catch (error) {
-      console.error('Error signing UserOperation:', error);
-      throw new Error('Failed to sign UserOperation');
-    }
-  }
-
-  /**
-   * Submit UserOperation to bundler
-   */
-  async submitUserOperation(signedUserOp) {
-    try {
-      // In production, this would call the actual bundler API
-      // For demo, we'll simulate the submission
-      
-      console.log('Submitting UserOperation:', signedUserOp);
-      
-      // Simulate bundler response
-      const userOpHash = this.getUserOperationHash(signedUserOp);
-      
-      // For local testing, we can directly execute the transaction
-      if (process.env.NODE_ENV === 'development') {
-        return await this.simulateDirectExecution(signedUserOp);
-      }
-      
-      return {
-        userOpHash,
-        status: 'pending'
-      };
-    } catch (error) {
-      console.error('Error submitting UserOperation:', error);
-      throw new Error('Failed to submit UserOperation');
-    }
-  }
-
-  /**
-   * Simulate direct execution for local testing
-   */
-  async simulateDirectExecution(userOp) {
-    try {
-      // Extract the inner call data
-      const accountInterface = new ethers.utils.Interface(this.simpleAccountABI);
-      const decoded = accountInterface.decodeFunctionData('execute', userOp.callData);
-      
-      const [target, value, data] = decoded;
-      
-      // Execute directly on the target contract
-      const tx = await this.wallet.sendTransaction({
-        to: target,
-        value: value,
-        data: data,
-        gasLimit: 300000
-      });
-      
-      const receipt = await tx.wait();
-      
-      return {
-        userOpHash: this.getUserOperationHash(userOp),
-        transactionHash: receipt.transactionHash,
-        blockNumber: receipt.blockNumber,
-        status: 'confirmed'
-      };
-    } catch (error) {
-      console.error('Error in direct execution:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get UserOperation hash
-   */
-  getUserOperationHash(userOp) {
-    // Simplified hash calculation
-    const packed = ethers.utils.defaultAbiCoder.encode(
-      ['address', 'uint256', 'bytes32', 'bytes32'],
-      [
-        userOp.sender,
-        userOp.nonce,
-        ethers.utils.keccak256(userOp.callData),
-        ethers.utils.keccak256(userOp.paymasterAndData)
-      ]
-    );
-    
-    return ethers.utils.keccak256(packed);
-  }
-
-  /**
-   * Check transaction status
+   * Check transaction status on Sepolia
    */
   async checkTransactionStatus(transactionHash) {
     try {
@@ -222,11 +195,66 @@ class BlockchainService {
       return {
         status: receipt.status === 1 ? 'confirmed' : 'failed',
         blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString()
+        gasUsed: receipt.gasUsed.toString(),
+        confirmations: await receipt.confirmations()
       };
     } catch (error) {
       console.error('Error checking transaction status:', error);
-      return { status: 'unknown' };
+      return { status: 'unknown', error: error.message };
+    }
+  }
+
+  /**
+   * Verify note integrity on blockchain
+   */
+  async verifyNoteOnChain(noteId, expectedHash) {
+    try {
+      const noteIdBytes32 = ethers.utils.keccak256(ethers.utils.toUtf8Bytes(noteId));
+      const [noteHash, owner, timestamp, exists] = await this.notesRegistry.getNote(noteIdBytes32);
+      
+      if (!exists) {
+        return { verified: false, reason: 'Note not found on blockchain' };
+      }
+      
+      const expectedHashBytes32 = '0x' + expectedHash;
+      const verified = noteHash === expectedHashBytes32;
+      
+      return {
+        verified,
+        onChainHash: noteHash,
+        expectedHash: expectedHashBytes32,
+        owner,
+        timestamp: timestamp.toString(),
+        blockchainData: { noteHash, owner, timestamp, exists }
+      };
+      
+    } catch (error) {
+      console.error('Error verifying note on chain:', error);
+      return { verified: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get network info
+   */
+  async getNetworkInfo() {
+    try {
+      const network = await this.provider.getNetwork();
+      const blockNumber = await this.provider.getBlockNumber();
+      const gasPrice = await this.provider.getFeeData();
+      
+      return {
+        chainId: network.chainId.toString(),
+        name: network.name,
+        blockNumber,
+        gasPrice: {
+          maxFeePerGas: gasPrice.maxFeePerGas?.toString(),
+          maxPriorityFeePerGas: gasPrice.maxPriorityFeePerGas?.toString()
+        }
+      };
+    } catch (error) {
+      console.error('Error getting network info:', error);
+      throw error;
     }
   }
 }

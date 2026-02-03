@@ -324,54 +324,141 @@ function generateContentHash(title, content) {
 }
 
 async function generateWalletInfo(userUid) {
-  // Simulate wallet generation (in production, this would call your backend)
-  const ownerAddress = CryptoJS.SHA256(userUid).toString().slice(0, 40);
-  const walletAddress = `0x${CryptoJS.SHA256(ownerAddress + '0').toString().slice(0, 40)}`;
-  
-  return {
-    walletAddress: walletAddress,
-    ownerAddress: `0x${ownerAddress}`,
-    walletSalt: 0
-  };
-}
-
-// Blockchain Processing (Simulated)
-async function processBlockchainRegistration(docId, noteId, contentHash) {
   try {
-    console.log(`🔗 Processing blockchain registration for note: ${noteId}`);
+    // Call backend to get real wallet address
+    const response = await fetch('http://localhost:3001/api/wallet/address', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        userUid: userUid
+      })
+    });
     
-    // Simulate blockchain processing delay
-    setTimeout(async () => {
-      try {
-        // Simulate successful blockchain registration
-        const mockTxHash = `0x${CryptoJS.SHA256(noteId + Date.now()).toString().slice(0, 64)}`;
-        const mockBlockNumber = Math.floor(Math.random() * 1000000) + 18000000;
-        
-        // Update note with blockchain info
-        const noteRef = doc(db, NOTES_COLLECTION, docId);
-        await updateDoc(noteRef, {
-          onChainStatus: 'confirmed',
-          transactionHash: mockTxHash,
-          blockNumber: mockBlockNumber,
-          onChainTimestamp: serverTimestamp()
-        });
-        
-        console.log(`✅ Blockchain registration completed for note: ${noteId}`);
-      } catch (error) {
-        console.error(`❌ Blockchain registration failed for note: ${noteId}`, error);
-        
-        // Update note status to failed
-        const noteRef = doc(db, NOTES_COLLECTION, docId);
-        await updateDoc(noteRef, {
-          onChainStatus: 'failed'
-        });
-      }
-    }, 2000 + Math.random() * 3000); // Random delay 2-5 seconds
+    const walletInfo = await response.json();
     
+    if (walletInfo.walletAddress) {
+      return {
+        walletAddress: walletInfo.walletAddress,
+        ownerAddress: walletInfo.ownerAddress,
+        walletSalt: walletInfo.salt
+      };
+    } else {
+      throw new Error('Failed to generate wallet info');
+    }
   } catch (error) {
-    console.error('Error in blockchain registration:', error);
+    console.error('Error generating wallet info:', error);
+    
+    // Fallback to deterministic generation if backend fails
+    const ownerAddress = CryptoJS.SHA256(userUid).toString().slice(0, 40);
+    const walletAddress = `0x${CryptoJS.SHA256(ownerAddress + '0').toString().slice(0, 40)}`;
+    
+    return {
+      walletAddress: walletAddress,
+      ownerAddress: `0x${ownerAddress}`,
+      walletSalt: 0
+    };
   }
 }
+
+// Blockchain Processing (Real Backend Integration)
+async function processBlockchainRegistration(docId, noteId, contentHash) {
+  try {
+    console.log(`🔗 Processing real blockchain registration for note: ${noteId}`);
+    
+    // Call backend to register note on Sepolia
+    const response = await fetch('http://localhost:3001/api/notes/register', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        noteId: noteId,
+        noteHash: contentHash,
+        userUid: auth.currentUser.uid
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (result.status === 'confirmed') {
+      // Update note with real blockchain info
+      const noteRef = doc(db, NOTES_COLLECTION, docId);
+      await updateDoc(noteRef, {
+        onChainStatus: 'confirmed',
+        transactionHash: result.transactionHash,
+        blockNumber: result.blockNumber,
+        onChainTimestamp: serverTimestamp()
+      });
+      
+      console.log(`✅ Real blockchain registration completed for note: ${noteId}`);
+      console.log(`📍 Transaction: ${result.transactionHash}`);
+      console.log(`📍 Block: ${result.blockNumber}`);
+    } else {
+      throw new Error(result.error || 'Blockchain registration failed');
+    }
+    
+  } catch (error) {
+    console.error(`❌ Real blockchain registration failed for note: ${noteId}`, error);
+    
+    // Update note status to failed
+    const noteRef = doc(db, NOTES_COLLECTION, docId);
+    await updateDoc(noteRef, {
+      onChainStatus: 'failed',
+      errorMessage: error.message
+    });
+  }
+}
+
+// Verification Service
+export const verificationService = {
+  // Verify note integrity on blockchain
+  async verifyNote(noteId, expectedHash) {
+    try {
+      const response = await fetch('http://localhost:3001/api/notes/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          noteId: noteId,
+          expectedHash: expectedHash
+        })
+      });
+      
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error verifying note:', error);
+      return { verified: false, error: error.message };
+    }
+  },
+
+  // Check transaction status
+  async checkTransactionStatus(transactionHash) {
+    try {
+      const response = await fetch(`http://localhost:3001/api/transaction/${transactionHash}`);
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error checking transaction status:', error);
+      return { status: 'unknown', error: error.message };
+    }
+  },
+
+  // Get blockchain status
+  async getBlockchainStatus() {
+    try {
+      const response = await fetch('http://localhost:3001/api/blockchain/status');
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error getting blockchain status:', error);
+      return { status: 'error', error: error.message };
+    }
+  }
+};
 
 async function processBlockchainUpdate(docId, noteId, contentHash) {
   // For updates, use the same registration process
