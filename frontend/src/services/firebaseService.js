@@ -212,6 +212,22 @@ export const notesService = {
     }
   },
 
+  // Update note status (for blockchain confirmations)
+  async updateNoteStatus(docId, statusData) {
+    try {
+      const noteRef = doc(db, NOTES_COLLECTION, docId);
+      await updateDoc(noteRef, {
+        ...statusData,
+        updatedAt: serverTimestamp()
+      });
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating note status:', error);
+      throw error;
+    }
+  },
+
   // Listen to notes changes in real-time
   subscribeToNotes(callback) {
     const userId = auth.currentUser.uid;

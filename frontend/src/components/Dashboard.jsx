@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingNote, setEditingNote] = useState(null)
+  const [checkingStatus, setCheckingStatus] = useState(false)
 
   useEffect(() => {
     loadDashboardData()
@@ -17,10 +18,110 @@ const Dashboard = () => {
     // Set up real-time listener for notes
     const unsubscribe = notesService.subscribeToNotes((updatedNotes) => {
       setNotes(updatedNotes)
+      // Check for pending notes that might need status updates
+      checkPendingNotesStatus(updatedNotes)
     })
 
     return () => unsubscribe()
   }, [])
+
+  // Function to check and update pending notes status
+  const checkPendingNotesStatus = async (notesList) => {
+    const pendingNotes = notesList.filter(note => 
+      note.onChainStatus === 'pending' && 
+      note.createdAt && 
+      // Only check notes that are older than 1 minute (likely completed)
+      (Date.now() - note.createdAt.toDate().getTime()) > 60000
+    )
+
+    if (pendingNotes.length > 0) {
+      console.log(`🔍 Checking status for ${pendingNotes.length} pending notes...`)
+      
+      for (const note of pendingNotes) {
+        try {
+          // Check if the note was actually registered on blockchain
+          const response = await fetch('http://localhost:3001/api/notes/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              noteId: note.id,
+              expectedHash: note.contentHash
+            })
+          })
+          
+          const verificationResult = await response.json()
+          
+          if (verificationResult.verified) {
+            // Note is actually confirmed on blockchain, update Firestore
+            console.log(`✅ Found confirmed note ${note.id}, updating status...`)
+            
+            await notesService.updateNoteStatus(note.docId, {
+              onChainStatus: 'confirmed',
+              // We don't have the exact transaction hash, but we know it's confirmed
+              verifiedAt: new Date()
+            })
+          }
+        } catch (error) {
+          console.error(`Error checking note ${note.id}:`, error)
+        }
+      }
+    }
+  }
+
+  // Function to manually check all pending notes
+  const handleRefreshStatus = async () => {
+    setCheckingStatus(true)
+    try {
+      const pendingNotes = notes.filter(note => note.onChainStatus === 'pending')
+      
+      if (pendingNotes.length === 0) {
+        toast.success('No pending notes to check')
+        return
+      }
+
+      toast.loading(`Checking ${pendingNotes.length} pending notes...`)
+      
+      let updatedCount = 0
+      for (const note of pendingNotes) {
+        try {
+          const response = await fetch('http://localhost:3001/api/notes/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              noteId: note.id,
+              expectedHash: note.contentHash
+            })
+          })
+          
+          const verificationResult = await response.json()
+          
+          if (verificationResult.verified) {
+            await notesService.updateNoteStatus(note.docId, {
+              onChainStatus: 'confirmed',
+              verifiedAt: new Date()
+            })
+            updatedCount++
+          }
+        } catch (error) {
+          console.error(`Error checking note ${note.id}:`, error)
+        }
+      }
+      
+      toast.dismiss()
+      if (updatedCount > 0) {
+        toast.success(`Updated ${updatedCount} notes to confirmed status!`)
+      } else {
+        toast.info('All pending notes are still processing on blockchain')
+      }
+      
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Failed to check note status')
+      console.error('Error refreshing status:', error)
+    } finally {
+      setCheckingStatus(false)
+    }
+  }
 
   const loadDashboardData = async () => {
     try {
@@ -203,15 +304,35 @@ const Dashboard = () => {
             <span className="px-2 py-0.5 bg-brand-surface text-brand-text-secondary text-[11px] rounded font-mono">
               {notes.length}
             </span>
+            {notes.filter(n => n.onChainStatus === 'pending').length > 0 && (
+              <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 text-[11px] rounded font-mono">
+                {notes.filter(n => n.onChainStatus === 'pending').length} pending
+              </span>
+            )}
           </h2>
           
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-brand-text-primary hover:bg-white text-brand-bg px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[18px]">add</span>
-            Create Note
-          </button>
+          <div className="flex items-center gap-3">
+            {notes.filter(n => n.onChainStatus === 'pending').length > 0 && (
+              <button
+                onClick={handleRefreshStatus}
+                disabled={checkingStatus}
+                className="bg-brand-surface hover:bg-brand-surface-hover text-brand-text-primary px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 border border-brand-border"
+              >
+                <span className={`material-symbols-outlined text-[18px] ${checkingStatus ? 'animate-spin' : ''}`}>
+                  {checkingStatus ? 'sync' : 'refresh'}
+                </span>
+                {checkingStatus ? 'Checking...' : 'Refresh Status'}
+              </button>
+            )}
+            
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-brand-text-primary hover:bg-white text-brand-bg px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">add</span>
+              Create Note
+            </button>
+          </div>
         </div>
 
         {/* Notes Grid */}
