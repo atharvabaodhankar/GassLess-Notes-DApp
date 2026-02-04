@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
 
 // Load environment variables
 dotenv.config();
@@ -11,9 +13,101 @@ const blockchainService = require('./services/blockchain');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Security middleware
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP for API
+  crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes default
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 100 : 1000),
+  message: {
+    error: 'Too many requests from this IP, please try again later.',
+    retryAfter: Math.ceil((parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 60000) + ' minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks
+    return req.path === '/health';
+  }
+});
+
+// Blockchain operations rate limiting (more restrictive)
+const blockchainLimiter = rateLimit({
+  windowMs: parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000, // 5 minutes default
+  max: parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 10 : 50),
+  message: {
+    error: 'Too many blockchain requests, please wait before trying again.',
+    retryAfter: Math.ceil((parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000) / 60000) + ' minutes'
+  },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+app.use(limiter);
+
+// CORS Configuration
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+      : ['http://localhost:5174', 'http://localhost:5173', 'http://localhost:3000'];
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: process.env.CORS_CREDENTIALS === 'true',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'Cache-Control',
+    'X-Access-Token'
+  ],
+  exposedHeaders: ['X-Total-Count', 'X-RateLimit-Limit', 'X-RateLimit-Remaining'],
+  maxAge: 86400 // 24 hours
+};
+
 // Middleware
-app.use(cors());
-app.use(express.json());
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const origin = req.get('Origin') || 'No Origin';
+  const userAgent = req.get('User-Agent') || 'No User-Agent';
+  console.log(`${timestamp} - ${req.method} ${req.path} - Origin: ${origin} - UA: ${userAgent.slice(0, 50)}`);
+  next();
+});
+
+// Additional security headers middleware
+app.use((req, res, next) => {
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'DENY');
+  res.header('X-XSS-Protection', '1; mode=block');
+  res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  
+  if (process.env.NODE_ENV === 'production') {
+    res.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
+  
+  next();
+});
 
 // Health check
 app.get('/health', (req, res) => {
@@ -21,9 +115,26 @@ app.get('/health', (req, res) => {
     status: 'OK', 
     message: 'Gasless Notes Backend - Real Blockchain Integration',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    environment: process.env.NODE_ENV,
+    cors: {
+      allowedOrigins: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',') : ['http://localhost:5174', 'http://localhost:5173'],
+      credentials: process.env.CORS_CREDENTIALS === 'true'
+    },
+    rateLimits: {
+      general: {
+        windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+        maxRequests: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 100 : 1000)
+      },
+      blockchain: {
+        windowMs: parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000,
+        maxRequests: parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 10 : 50)
+      }
+    }
   });
 });
+
+// CORS preflight handler
+app.options('*', cors(corsOptions));
 
 // Blockchain status endpoint
 app.get('/api/blockchain/status', async (req, res) => {
@@ -50,7 +161,7 @@ app.get('/api/blockchain/status', async (req, res) => {
 });
 
 // Get wallet address for user
-app.post('/api/wallet/address', async (req, res) => {
+app.post('/api/wallet/address', blockchainLimiter, async (req, res) => {
   try {
     const { userUid } = req.body;
     
@@ -67,7 +178,7 @@ app.post('/api/wallet/address', async (req, res) => {
 });
 
 // Register note on blockchain
-app.post('/api/notes/register', async (req, res) => {
+app.post('/api/notes/register', blockchainLimiter, async (req, res) => {
   try {
     const { noteId, noteHash, userUid } = req.body;
     
@@ -108,7 +219,7 @@ app.get('/api/transaction/:hash', async (req, res) => {
 });
 
 // Verify note on blockchain
-app.post('/api/notes/verify', async (req, res) => {
+app.post('/api/notes/verify', blockchainLimiter, async (req, res) => {
   try {
     const { noteId, expectedHash } = req.body;
     
@@ -148,6 +259,12 @@ app.listen(PORT, () => {
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`⛓️  Connected to Sepolia blockchain`);
+  console.log(`🛡️  Security features enabled:`);
+  console.log(`   • CORS: ${process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').join(', ') : 'Default origins'}`);
+  console.log(`   • Rate Limiting: ${parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 100 : 1000)} req/15min`);
+  console.log(`   • Blockchain Rate Limiting: ${parseInt(process.env.BLOCKCHAIN_RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 10 : 50)} req/5min`);
+  console.log(`   • Helmet Security Headers: Enabled`);
+  console.log(`   • Request Logging: Enabled`);
   console.log(`📍 Available endpoints:`);
   console.log(`   GET  /health`);
   console.log(`   GET  /api/blockchain/status`);
