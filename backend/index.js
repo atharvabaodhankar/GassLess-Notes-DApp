@@ -177,7 +177,58 @@ app.post('/api/wallet/address', blockchainLimiter, async (req, res) => {
   }
 });
 
-// Register note on blockchain
+// Get detailed wallet info (ERC-4337 enhanced)
+app.post('/api/wallet/info', blockchainLimiter, async (req, res) => {
+  try {
+    const { userUid } = req.body;
+    
+    if (!userUid) {
+      return res.status(400).json({ error: 'userUid is required' });
+    }
+    
+    const walletInfo = await blockchainService.getWalletInfo(userUid);
+    res.json(walletInfo);
+  } catch (error) {
+    console.error('Error getting wallet info:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Deploy user's smart wallet
+app.post('/api/wallet/deploy', blockchainLimiter, async (req, res) => {
+  try {
+    const { userUid } = req.body;
+    
+    if (!userUid) {
+      return res.status(400).json({ error: 'userUid is required' });
+    }
+    
+    const deployResult = await blockchainService.deployUserWallet(userUid);
+    res.json(deployResult);
+  } catch (error) {
+    console.error('Error deploying wallet:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Fund user's smart wallet with ETH
+app.post('/api/wallet/fund', blockchainLimiter, async (req, res) => {
+  try {
+    const { userUid, amount } = req.body;
+    
+    if (!userUid) {
+      return res.status(400).json({ error: 'userUid is required' });
+    }
+    
+    const fundResult = await blockchainService.fundUserWallet(userUid, amount || '0.01');
+    res.json(fundResult);
+  } catch (error) {
+    console.error('Error funding wallet:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register note on blockchain (TRUE ERC-4337)
 app.post('/api/notes/register', blockchainLimiter, async (req, res) => {
   try {
     const { noteId, noteHash, userUid } = req.body;
@@ -188,9 +239,17 @@ app.post('/api/notes/register', blockchainLimiter, async (req, res) => {
       });
     }
     
-    console.log(`📝 Registering note ${noteId} for user ${userUid}`);
+    console.log(`📝 TRUE ERC-4337: Registering note ${noteId} for user ${userUid}`);
     
     const result = await blockchainService.registerNoteOnChain(noteId, noteHash, userUid);
+    
+    // Add ERC-4337 metadata to response
+    if (result.erc4337) {
+      console.log(`🎯 SUCCESS: True ERC-4337 UserOperation executed!`);
+    } else {
+      console.log(`🔄 FALLBACK: Direct registration used`);
+    }
+    
     res.json(result);
   } catch (error) {
     console.error('Error registering note:', error);
@@ -255,10 +314,11 @@ app.use('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Gasless Notes Backend (Real Blockchain) running on port ${PORT}`);
+  console.log(`🚀 Gasless Notes Backend (TRUE ERC-4337) running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/health`);
   console.log(`⛓️  Connected to Sepolia blockchain`);
+  console.log(`🎯 TRUE ERC-4337 MODE: UserOperations via EntryPoint WITH PAYMASTER`);
   console.log(`🛡️  Security features enabled:`);
   console.log(`   • CORS: ${process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').join(', ') : 'Default origins'}`);
   console.log(`   • Rate Limiting: ${parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || (process.env.NODE_ENV === 'production' ? 100 : 1000)} req/15min`);
@@ -269,7 +329,10 @@ app.listen(PORT, () => {
   console.log(`   GET  /health`);
   console.log(`   GET  /api/blockchain/status`);
   console.log(`   POST /api/wallet/address`);
-  console.log(`   POST /api/notes/register`);
+  console.log(`   POST /api/wallet/info          [NEW - ERC-4337 wallet details]`);
+  console.log(`   POST /api/wallet/deploy        [NEW - Deploy smart wallet]`);
+  console.log(`   POST /api/wallet/fund          [NEW - Fund smart wallet with ETH]`);
+  console.log(`   POST /api/notes/register       [UPGRADED - True ERC-4337]`);
   console.log(`   POST /api/notes/verify`);
   console.log(`   GET  /api/transaction/:hash`);
 });
