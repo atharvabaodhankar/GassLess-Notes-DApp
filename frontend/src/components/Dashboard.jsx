@@ -75,7 +75,7 @@ const Dashboard = () => {
   const handleRefreshStatus = async () => {
     setCheckingStatus(true)
     try {
-      const pendingNotes = notes.filter(note => note.onChainStatus === 'pending')
+      const pendingNotes = notes.filter(note => ['pending', 'processing'].includes(note.onChainStatus))
       
       if (pendingNotes.length === 0) {
         toast.success('No pending notes to check')
@@ -130,15 +130,23 @@ const Dashboard = () => {
 
   const handleRefreshSingleNote = async (noteId) => {
     try {
-      toast.loading('Checking transaction status...')
+      toast.loading('Checking blockchain status...')
       
       const result = await checkNoteTransactionStatus(noteId)
       
       toast.dismiss()
       if (result === 'confirmed') {
-        toast.success('Transaction confirmed! Note status updated.')
+        toast.success('✅ Transaction confirmed! Note verified on blockchain.')
+      } else if (result === 'retrying') {
+        toast('🔄 Retrying blockchain registration...', {
+          icon: '🔄'
+        })
+      } else if (result === 'failed') {
+        toast('❌ Transaction could not be verified on blockchain.', {
+          icon: '❌'
+        })
       } else {
-        toast('Transaction is still processing or failed. Please try again later.', {
+        toast('Transaction is still processing. Please try again later.', {
           icon: 'ℹ️'
         })
       }
@@ -174,6 +182,8 @@ const Dashboard = () => {
         return 'check_circle'
       case 'pending':
         return 'schedule'
+      case 'processing':
+        return 'sync'
       case 'failed':
         return 'error'
       default:
@@ -187,6 +197,8 @@ const Dashboard = () => {
         return 'text-brand-accent-green bg-brand-accent-green/10'
       case 'pending':
         return 'text-yellow-500 bg-yellow-500/10'
+      case 'processing':
+        return 'text-blue-400 bg-blue-400/10'
       case 'failed':
         return 'text-red-400 bg-red-400/10'
       default:
@@ -200,20 +212,8 @@ const Dashboard = () => {
         await notesService.updateNote(editingNote.docId, noteData)
         toast.success('Note updated successfully!')
       } else {
-        const result = await notesService.createNote(noteData)
-        
-        // Show different success messages based on blockchain result
-        if (result?.blockchainResult?.erc4337 && result?.blockchainResult?.paymasterUsed) {
-          toast.success('🎉 Note created with zero gas fees! ERC-4337 paymaster sponsored your transaction.', {
-            duration: 5000
-          })
-        } else if (result?.blockchainResult?.erc4337) {
-          toast.success('✅ Note created using ERC-4337 smart wallet!', {
-            duration: 4000
-          })
-        } else {
-          toast.success('Note created successfully!')
-        }
+        await notesService.createNote(noteData)
+        toast.success('Note created! Blockchain verification in progress...')
       }
       
       setShowCreateModal(false)
@@ -321,6 +321,15 @@ const Dashboard = () => {
           
           <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
             <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+              Processing
+            </div>
+            <div className="text-2xl font-medium text-blue-400">
+              {notes.filter(n => n.onChainStatus === 'processing').length}
+            </div>
+          </div>
+          
+          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
               Pending
             </div>
             <div className="text-2xl font-medium">
@@ -343,15 +352,15 @@ const Dashboard = () => {
             <span className="px-2 py-0.5 bg-brand-surface text-brand-text-secondary text-[11px] rounded font-mono">
               {notes.length}
             </span>
-            {notes.filter(n => n.onChainStatus === 'pending').length > 0 && (
+            {(notes.filter(n => n.onChainStatus === 'pending').length > 0 || notes.filter(n => n.onChainStatus === 'processing').length > 0) && (
               <span className="px-2 py-0.5 bg-yellow-500/10 text-yellow-500 text-[11px] rounded font-mono">
-                {notes.filter(n => n.onChainStatus === 'pending').length} pending
+                {notes.filter(n => ['pending', 'processing'].includes(n.onChainStatus)).length} processing
               </span>
             )}
           </h2>
           
           <div className="flex items-center gap-3">
-            {notes.filter(n => n.onChainStatus === 'pending').length > 0 && (
+            {(notes.filter(n => ['pending', 'processing'].includes(n.onChainStatus)).length > 0) && (
               <button
                 onClick={handleRefreshStatus}
                 disabled={checkingStatus}
@@ -432,11 +441,11 @@ const Dashboard = () => {
                     </div>
                     
                     <div className={`flex items-center gap-2 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${getStatusColor(note.onChainStatus)}`}>
-                      <span className="material-symbols-outlined text-[14px]">
+                      <span className={`material-symbols-outlined text-[14px] ${note.onChainStatus === 'processing' ? 'animate-spin' : ''}`}>
                         {getStatusIcon(note.onChainStatus)}
                       </span>
                       {note.onChainStatus}
-                      {note.onChainStatus === 'failed' && (
+                      {(note.onChainStatus === 'failed' || note.onChainStatus === 'processing') && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
