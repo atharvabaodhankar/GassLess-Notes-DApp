@@ -350,13 +350,6 @@ const Dashboard = () => {
             </div>
           </div>
           
-          <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
-            <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
-              Gas Fees Paid
-            </div>
-            <div className="text-2xl font-medium">$0.00</div>
-          </div>
-          
           {paymasterStatus && (
             <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
               <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
