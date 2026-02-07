@@ -101,10 +101,19 @@ export const notesService = {
 
       const docRef = await addDoc(collection(db, NOTES_COLLECTION), note);
       
-      // Process blockchain registration asynchronously
-      processBlockchainRegistration(docRef.id, noteId, contentHash);
+      // Process blockchain registration and return result
+      let blockchainResult = null;
+      try {
+        blockchainResult = await processBlockchainRegistration(docRef.id, noteId, contentHash);
+      } catch (error) {
+        console.error('Blockchain registration failed, but note saved to Firebase:', error);
+      }
       
-      return { ...note, docId: docRef.id };
+      return { 
+        ...note, 
+        docId: docRef.id,
+        blockchainResult: blockchainResult
+      };
     } catch (error) {
       console.error('Error creating note:', error);
       throw error;
@@ -383,6 +392,13 @@ async function processBlockchainRegistration(docId, noteId, contentHash) {
   try {
     console.log(`🔗 Processing real blockchain registration for note: ${noteId}`);
     
+    // Update status to processing
+    const noteRef = doc(db, NOTES_COLLECTION, docId);
+    await updateDoc(noteRef, {
+      onChainStatus: 'processing',
+      processingStarted: serverTimestamp()
+    });
+    
     // Call backend to register note on Sepolia
     const response = await fetch('http://localhost:3001/api/notes/register', {
       method: 'POST',
@@ -400,17 +416,23 @@ async function processBlockchainRegistration(docId, noteId, contentHash) {
     
     if (result.status === 'confirmed') {
       // Update note with real blockchain info
-      const noteRef = doc(db, NOTES_COLLECTION, docId);
       await updateDoc(noteRef, {
         onChainStatus: 'confirmed',
         transactionHash: result.transactionHash,
         blockNumber: result.blockNumber,
+        gasUsed: result.gasUsed,
+        smartWallet: result.smartWallet,
+        erc4337: result.erc4337,
+        paymasterUsed: result.paymasterUsed,
         onChainTimestamp: serverTimestamp()
       });
       
       console.log(`✅ Real blockchain registration completed for note: ${noteId}`);
       console.log(`📍 Transaction: ${result.transactionHash}`);
       console.log(`📍 Block: ${result.blockNumber}`);
+      console.log(`🎯 ERC-4337: ${result.erc4337}, Paymaster: ${result.paymasterUsed}`);
+      
+      return result; // Return the blockchain result
     } else {
       throw new Error(result.error || 'Blockchain registration failed');
     }
@@ -418,12 +440,15 @@ async function processBlockchainRegistration(docId, noteId, contentHash) {
   } catch (error) {
     console.error(`❌ Real blockchain registration failed for note: ${noteId}`, error);
     
-    // Update note status to failed
+    // Update status to failed
     const noteRef = doc(db, NOTES_COLLECTION, docId);
     await updateDoc(noteRef, {
       onChainStatus: 'failed',
-      errorMessage: error.message
+      error: error.message,
+      failedAt: serverTimestamp()
     });
+    
+    throw error;
   }
 }
 
@@ -479,4 +504,85 @@ export const verificationService = {
 async function processBlockchainUpdate(docId, noteId, contentHash) {
   // For updates, use the same registration process
   await processBlockchainRegistration(docId, noteId, contentHash);
+}
+
+// Recover stuck transactions on app load
+export async function recoverStuckTransactions() {
+  if (!auth.currentUser) return;
+  
+  try {
+    const notesRef = collection(db, NOTES_COLLECTION);
+    const q = query(
+      notesRef,
+      where('userId', '==', auth.currentUser.uid),
+      where('onChainStatus', '==', 'processing')
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    for (const docSnap of querySnapshot.docs) {
+      const note = docSnap.data();
+      const docId = docSnap.id;
+      
+      // Check if processing started more than 5 minutes ago
+      const processingStarted = note.processingStarted?.toDate();
+      if (processingStarted && Date.now() - processingStarted.getTime() > 5 * 60 * 1000) {
+        console.log(`🔄 Recovering stuck transaction for note: ${note.id}`);
+        
+        // Mark as failed if stuck too long
+        const noteRef = doc(db, NOTES_COLLECTION, docId);
+        await updateDoc(noteRef, {
+          onChainStatus: 'failed',
+          error: 'Transaction timeout - please try again',
+          recoveredAt: serverTimestamp()
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error recovering stuck transactions:', error);
+  }
+}
+
+// Manual transaction status check for specific note
+export async function checkNoteTransactionStatus(noteId) {
+  if (!auth.currentUser) return null;
+  
+  try {
+    const notesRef = collection(db, NOTES_COLLECTION);
+    const q = query(
+      notesRef,
+      where('userId', '==', auth.currentUser.uid),
+      where('id', '==', noteId)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const noteDoc = querySnapshot.docs[0];
+      const note = noteDoc.data();
+      
+      if (note.transactionHash && note.onChainStatus === 'processing') {
+        // Check transaction status on blockchain
+        const status = await verificationService.checkTransactionStatus(note.transactionHash);
+        
+        if (status.status === 'confirmed') {
+          // Update note status
+          const noteRef = doc(db, NOTES_COLLECTION, noteDoc.id);
+          await updateDoc(noteRef, {
+            onChainStatus: 'confirmed',
+            blockNumber: status.blockNumber,
+            onChainTimestamp: serverTimestamp()
+          });
+          
+          console.log(`✅ Recovered transaction status for note: ${noteId}`);
+          return 'confirmed';
+        }
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error checking note transaction status:', error);
+    return null;
+  }
 }

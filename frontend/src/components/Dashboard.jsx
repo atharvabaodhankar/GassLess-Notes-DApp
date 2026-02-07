@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { notesService, walletService } from '../services/firebaseService'
+import { notesService, walletService, recoverStuckTransactions, checkNoteTransactionStatus } from '../services/firebaseService'
 import toast from 'react-hot-toast'
 
 const Dashboard = () => {
@@ -14,6 +14,9 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadDashboardData()
+    
+    // Recover any stuck transactions on load
+    recoverStuckTransactions()
     
     // Set up real-time listener for notes
     const unsubscribe = notesService.subscribeToNotes((updatedNotes) => {
@@ -111,7 +114,9 @@ const Dashboard = () => {
       if (updatedCount > 0) {
         toast.success(`Updated ${updatedCount} notes to confirmed status!`)
       } else {
-        toast.info('All pending notes are still processing on blockchain')
+        toast('All pending notes are still processing on blockchain', {
+          icon: 'ℹ️'
+        })
       }
       
     } catch (error) {
@@ -120,6 +125,28 @@ const Dashboard = () => {
       console.error('Error refreshing status:', error)
     } finally {
       setCheckingStatus(false)
+    }
+  }
+
+  const handleRefreshSingleNote = async (noteId) => {
+    try {
+      toast.loading('Checking transaction status...')
+      
+      const result = await checkNoteTransactionStatus(noteId)
+      
+      toast.dismiss()
+      if (result === 'confirmed') {
+        toast.success('Transaction confirmed! Note status updated.')
+      } else {
+        toast('Transaction is still processing or failed. Please try again later.', {
+          icon: 'ℹ️'
+        })
+      }
+      
+    } catch (error) {
+      toast.dismiss()
+      toast.error('Failed to check transaction status')
+      console.error('Error checking single note:', error)
     }
   }
 
@@ -173,8 +200,20 @@ const Dashboard = () => {
         await notesService.updateNote(editingNote.docId, noteData)
         toast.success('Note updated successfully!')
       } else {
-        await notesService.createNote(noteData)
-        toast.success('Note created successfully!')
+        const result = await notesService.createNote(noteData)
+        
+        // Show different success messages based on blockchain result
+        if (result?.blockchainResult?.erc4337 && result?.blockchainResult?.paymasterUsed) {
+          toast.success('🎉 Note created with zero gas fees! ERC-4337 paymaster sponsored your transaction.', {
+            duration: 5000
+          })
+        } else if (result?.blockchainResult?.erc4337) {
+          toast.success('✅ Note created using ERC-4337 smart wallet!', {
+            duration: 4000
+          })
+        } else {
+          toast.success('Note created successfully!')
+        }
       }
       
       setShowCreateModal(false)
@@ -397,6 +436,18 @@ const Dashboard = () => {
                         {getStatusIcon(note.onChainStatus)}
                       </span>
                       {note.onChainStatus}
+                      {note.onChainStatus === 'failed' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRefreshSingleNote(note.id);
+                          }}
+                          className="ml-1 p-0.5 hover:bg-white/10 rounded transition-colors"
+                          title="Check transaction status"
+                        >
+                          <span className="material-symbols-outlined text-[12px]">refresh</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
