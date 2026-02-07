@@ -145,11 +145,11 @@ npm run dev
 
 ### **Smart Contracts**
 ```solidity
-// Deployed on Sepolia
+// Deployed on Sepolia Testnet
 EntryPoint:      0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789 (Canonical)
 AccountFactory:  0x34E676A2307ad597547d5dABFA466264dBb739C6
 NotesRegistry:   0x14f3dfddab66f0E2C14d46415bc635b3a363EeDf
-Paymaster:       0x9D18bDD3E47990e4da201936A1433dB8eB53DA3b
+Paymaster:       0x9D18bDD3E47990e4da201936A1433dB8eB53DA3b (0.4 ETH funded)
 ```
 
 ## 🔐 **Security Features**
@@ -172,6 +172,29 @@ Paymaster:       0x9D18bDD3E47990e4da201936A1433dB8eB53DA3b
 - Server-side parameter sanitization
 - Firebase security rules (recommended)
 - Environment variable protection
+
+## 💰 **Paymaster Management**
+
+The paymaster sponsors all gas fees for users. Current status:
+
+- **Balance**: 0.4 ETH (~200 transactions)
+- **Auto-funding**: Enabled when balance < 0.05 ETH
+- **Status**: Production ready
+
+### **Paymaster Commands**
+```bash
+# Check paymaster status
+npm run paymaster:check
+
+# Quick balance check
+npm run paymaster:balance
+
+# Fund paymaster (to 0.4 ETH target)
+npm run paymaster:fund
+
+# Start monitoring
+npm run paymaster:monitor
+```
 
 ## 📊 **API Endpoints**
 
@@ -353,12 +376,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 **Support**
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/GassLess-Notes-DApp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/GassLess-Notes-DApp/discussions)
-- **Email**: your.email@example.com
+- **Issues**: [GitHub Issues](https://github.com/atharvabaodhankar/GassLess-Notes-DApp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/atharvabaodhankar/GassLess-Notes-DApp/discussions)
+- **Developer**: [@atharvabaodhankar](https://github.com/atharvabaodhankar)
 
 ---
 
-**Built with ❤️ for the future of Web3 UX**
+**Built with ❤️ by [Atharva Baodhankar](https://github.com/atharvabaodhankar)**
 
 *This project demonstrates how ERC-4337 Account Abstraction can create Web2-like experiences while maintaining Web3's security and decentralization benefits.*

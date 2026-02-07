@@ -259,9 +259,16 @@ const Dashboard = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
             <div className="flex items-center space-x-6">
-              <span className="text-lg font-semibold tracking-tight text-brand-text-primary">
-                Gasless Notes
-              </span>
+              <div className="flex items-center space-x-3">
+                <img 
+                  src="/logo.png" 
+                  alt="Gasless Notes Logo" 
+                  className="w-8 h-8 object-contain"
+                />
+                <span className="text-lg font-semibold tracking-tight text-brand-text-primary">
+                  Gasless Notes
+                </span>
+              </div>
               <div className="hidden sm:flex items-center space-x-3">
                 <span className="px-2.5 py-0.5 bg-brand-surface text-brand-text-secondary text-[10px] font-medium rounded border border-brand-border uppercase tracking-widest">
                   ERC-4337

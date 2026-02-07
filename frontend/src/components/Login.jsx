@@ -43,6 +43,13 @@ const Login = () => {
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
+          <div className="flex items-center justify-center mb-4">
+            <img 
+              src="/logo.png" 
+              alt="Gasless Notes Logo" 
+              className="w-16 h-16 object-contain"
+            />
+          </div>
           <h1 className="text-3xl font-bold text-brand-text-primary mb-2">
             Gasless Notes
           </h1>
