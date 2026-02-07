@@ -7,6 +7,7 @@ const Dashboard = () => {
   const { user, userProfile, logout } = useAuth()
   const [notes, setNotes] = useState([])
   const [walletInfo, setWalletInfo] = useState(null)
+  const [paymasterStatus, setPaymasterStatus] = useState(null)
   const [loading, setLoading] = useState(true)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [editingNote, setEditingNote] = useState(null)
@@ -161,13 +162,15 @@ const Dashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
-      const [notesData, walletData] = await Promise.all([
+      const [notesData, walletData, blockchainStatus] = await Promise.all([
         notesService.getNotes(),
-        walletService.getWalletInfo()
+        walletService.getWalletInfo(),
+        fetch('http://localhost:3001/api/blockchain/status').then(res => res.json()).catch(() => null)
       ])
       
       setNotes(notesData)
       setWalletInfo(walletData)
+      setPaymasterStatus(blockchainStatus?.paymaster || null)
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
       toast.error('Failed to load data')
@@ -267,6 +270,16 @@ const Dashboard = () => {
                   <span className="w-1 h-1 rounded-full bg-brand-accent-green"></span>
                   Firebase Live
                 </span>
+                {paymasterStatus && (
+                  <span className={`px-2.5 py-0.5 bg-brand-surface text-[10px] font-medium rounded border border-brand-border flex items-center gap-1.5 uppercase tracking-widest ${
+                    paymasterStatus.status === 'low' ? 'text-red-400' : 'text-brand-accent-green'
+                  }`}>
+                    <span className={`w-1 h-1 rounded-full ${
+                      paymasterStatus.status === 'low' ? 'bg-red-400' : 'bg-brand-accent-green'
+                    }`}></span>
+                    Paymaster {paymasterStatus.balance?.toFixed(3)}Ξ
+                  </span>
+                )}
               </div>
             </div>
             
@@ -343,6 +356,22 @@ const Dashboard = () => {
             </div>
             <div className="text-2xl font-medium">$0.00</div>
           </div>
+          
+          {paymasterStatus && (
+            <div className="bg-brand-surface p-6 rounded-lg border border-transparent">
+              <div className="text-[11px] font-medium text-brand-text-secondary uppercase tracking-widest mb-2">
+                Paymaster Balance
+              </div>
+              <div className={`text-2xl font-medium ${
+                paymasterStatus.status === 'low' ? 'text-red-400' : 'text-brand-accent-green'
+              }`}>
+                {paymasterStatus.balance?.toFixed(3)}Ξ
+              </div>
+              <div className="text-[10px] text-brand-text-secondary mt-1">
+                ~{paymasterStatus.estimatedTransactions} transactions
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Notes Section Header */}

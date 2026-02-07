@@ -50,7 +50,7 @@ async function fundPaymaster() {
     }
     
     // Fund paymaster if needed
-    const targetDeposit = ethers.utils.parseEther('0.1'); // 0.1 ETH
+    const targetDeposit = ethers.utils.parseEther('0.4'); // 0.4 ETH
     
     if (currentDeposit.lt(targetDeposit)) {
       const fundAmount = targetDeposit.sub(currentDeposit);

@@ -7,7 +7,11 @@
     "install:hardhat": "cd hardhat && npm install",
     "dev": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "deploy:contracts": "cd hardhat && npm run deploy:local"
+    "deploy:contracts": "cd hardhat && npm run deploy:local",
+    "paymaster:check": "cd backend && node check-paymaster-status.js",
+    "paymaster:fund": "cd backend && node fund-paymaster.js",
+    "paymaster:monitor": "cd backend && node monitor-paymaster.js",
+    "paymaster:balance": "cd backend && node -e \"const {ethers} = require('ethers'); const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL || 'https://eth-sepolia.g.alchemy.com/v2/YH8ErTqInvcMQ4ZkvCzSMVXee0aAg8LG'); const entryPoint = new ethers.Contract('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789', ['function balanceOf(address) view returns (uint256)'], provider); entryPoint.balanceOf('0x9D18bDD3E47990e4da201936A1433dB8eB53DA3b').then(b => console.log('💰 Paymaster Balance:', ethers.utils.formatEther(b), 'ETH'));\""
   },
   "keywords": ["firebase", "erc-4337", "account-abstraction", "gasless", "blockchain", "notes"],
   "author": "",

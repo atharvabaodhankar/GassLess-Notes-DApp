@@ -140,6 +140,12 @@ app.options('*', cors(corsOptions));
 app.get('/api/blockchain/status', async (req, res) => {
   try {
     const networkInfo = await blockchainService.getNetworkInfo();
+    
+    // Add paymaster monitoring
+    const PaymasterMonitor = require('./monitor-paymaster');
+    const monitor = new PaymasterMonitor();
+    const paymasterStatus = await monitor.getStatus();
+    
     res.json({
       status: 'ready',
       message: 'Blockchain service connected to Sepolia',
@@ -149,7 +155,8 @@ app.get('/api/blockchain/status', async (req, res) => {
         accountFactory: process.env.ACCOUNT_FACTORY_ADDRESS,
         notesRegistry: process.env.NOTES_REGISTRY_ADDRESS,
         paymaster: process.env.PAYMASTER_ADDRESS
-      }
+      },
+      paymaster: paymasterStatus
     });
   } catch (error) {
     res.status(500).json({
