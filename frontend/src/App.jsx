@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import HomePage from './components/HomePage'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 import LoadingSpinner from './components/LoadingSpinner'
@@ -14,6 +15,7 @@ function App() {
   return (
     <div className="min-h-screen bg-brand-bg">
       <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route 
           path="/login" 
           element={user ? <Navigate to="/dashboard" /> : <Login />} 
@@ -21,10 +23,6 @@ function App() {
         <Route 
           path="/dashboard" 
           element={user ? <Dashboard /> : <Navigate to="/login" />} 
-        />
-        <Route 
-          path="/" 
-          element={<Navigate to={user ? "/dashboard" : "/login"} />} 
         />
       </Routes>
     </div>
