@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { notesService, walletService, recoverStuckTransactions, checkNoteTransactionStatus } from '../services/firebaseService'
+import { buildApiUrl, API_ENDPOINTS } from '../utils/apiConfig'
 import toast from 'react-hot-toast'
 
 const Dashboard = () => {
@@ -44,7 +45,13 @@ const Dashboard = () => {
       for (const note of pendingNotes) {
         try {
           // Check if the note was actually registered on blockchain
-          const response = await fetch('http://localhost:3001/api/notes/verify', {
+          const url = buildApiUrl(API_ENDPOINTS.NOTES_VERIFY);
+          if (!url) {
+            console.warn('Backend not configured - skipping verification');
+            continue;
+          }
+          
+          const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -88,7 +95,13 @@ const Dashboard = () => {
       let updatedCount = 0
       for (const note of pendingNotes) {
         try {
-          const response = await fetch('http://localhost:3001/api/notes/verify', {
+          const url = buildApiUrl(API_ENDPOINTS.NOTES_VERIFY);
+          if (!url) {
+            console.warn('Backend not configured - skipping verification');
+            continue;
+          }
+          
+          const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -162,10 +175,16 @@ const Dashboard = () => {
   const loadDashboardData = async () => {
     try {
       setLoading(true)
+      
+      // Get blockchain status URL
+      const blockchainUrl = buildApiUrl(API_ENDPOINTS.BLOCKCHAIN_STATUS);
+      
       const [notesData, walletData, blockchainStatus] = await Promise.all([
         notesService.getNotes(),
         walletService.getWalletInfo(),
-        fetch('http://localhost:3001/api/blockchain/status').then(res => res.json()).catch(() => null)
+        blockchainUrl ? 
+          fetch(blockchainUrl).then(res => res.json()).catch(() => null) : 
+          Promise.resolve({ status: 'mock', network: 'disabled' })
       ])
       
       setNotes(notesData)

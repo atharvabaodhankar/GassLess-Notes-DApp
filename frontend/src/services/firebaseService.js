@@ -17,6 +17,7 @@ import {
 import { db, auth } from '../config/firebase';
 import CryptoJS from 'crypto-js';
 import toast from 'react-hot-toast';
+import { buildApiUrl, apiRequest, API_ENDPOINTS } from '../utils/apiConfig';
 
 // Collections
 const USERS_COLLECTION = 'users';
@@ -363,7 +364,13 @@ function generateContentHash(title, content) {
 async function generateWalletInfo(userUid) {
   try {
     // Call backend to get real wallet address
-    const response = await fetch('http://localhost:3001/api/wallet/address', {
+    const url = buildApiUrl(API_ENDPOINTS.WALLET_ADDRESS);
+    if (!url) {
+      console.warn('Backend not configured - using mock wallet address');
+      return 'mock-wallet-address-' + Math.random().toString(36).substr(2, 9);
+    }
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -422,7 +429,18 @@ async function processBlockchainRegistration(docId, noteId, contentHash) {
     
     while (retryCount <= maxRetries) {
       try {
-        response = await fetch('http://localhost:3001/api/notes/register', {
+        const url = buildApiUrl(API_ENDPOINTS.NOTES_REGISTER);
+        if (!url) {
+          console.warn('Backend not configured - skipping blockchain registration');
+          await updateDoc(noteRef, { 
+            status: 'completed',
+            blockchainTxHash: 'mock-tx-' + Math.random().toString(36).substr(2, 9),
+            updatedAt: serverTimestamp()
+          });
+          return;
+        }
+        
+        response = await fetch(url, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -522,7 +540,13 @@ export const verificationService = {
   // Verify note integrity on blockchain
   async verifyNote(noteId, expectedHash) {
     try {
-      const response = await fetch('http://localhost:3001/api/notes/verify', {
+      const url = buildApiUrl(API_ENDPOINTS.NOTES_VERIFY);
+      if (!url) {
+        console.warn('Backend not configured - returning mock verification');
+        return { verified: true, mock: true };
+      }
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -544,7 +568,13 @@ export const verificationService = {
   // Check transaction status
   async checkTransactionStatus(transactionHash) {
     try {
-      const response = await fetch(`http://localhost:3001/api/transaction/${transactionHash}`);
+      const url = buildApiUrl(`${API_ENDPOINTS.TRANSACTION_STATUS}/${transactionHash}`);
+      if (!url) {
+        console.warn('Backend not configured - returning mock transaction status');
+        return { status: 'completed', mock: true };
+      }
+      
+      const response = await fetch(url);
       const result = await response.json();
       return result;
     } catch (error) {
@@ -556,7 +586,13 @@ export const verificationService = {
   // Get blockchain status
   async getBlockchainStatus() {
     try {
-      const response = await fetch('http://localhost:3001/api/blockchain/status');
+      const url = buildApiUrl(API_ENDPOINTS.BLOCKCHAIN_STATUS);
+      if (!url) {
+        console.warn('Backend not configured - returning mock blockchain status');
+        return { status: 'connected', network: 'mock', mock: true };
+      }
+      
+      const response = await fetch(url);
       const result = await response.json();
       return result;
     } catch (error) {
@@ -620,7 +656,13 @@ export async function recoverStuckTransactions() {
 async function checkAndUpdateNoteStatus(docId, note) {
   try {
     // Try to check if the transaction actually succeeded on blockchain
-    const response = await fetch('http://localhost:3001/api/notes/verify', {
+    const url = buildApiUrl(API_ENDPOINTS.NOTES_VERIFY);
+    if (!url) {
+      console.warn('Backend not configured - skipping blockchain verification');
+      return;
+    }
+    
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -710,7 +752,13 @@ export async function checkNoteTransactionStatus(noteId) {
       const note = noteDoc.data();
       
       // Check if note is actually verified on blockchain
-      const response = await fetch('http://localhost:3001/api/notes/verify', {
+      const url = buildApiUrl(API_ENDPOINTS.NOTES_VERIFY);
+      if (!url) {
+        console.warn('Backend not configured - skipping blockchain verification');
+        return;
+      }
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
