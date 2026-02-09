@@ -71,22 +71,6 @@ body {
   animation: fadeInScale 0.5s ease-out;
 }
 
-/* Gradient text animation */
-@keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.animate-gradient {
-  background: linear-gradient(-45deg, #10a37f, #3b82f6, #8b5cf6, #10a37f);
-  background-size: 400% 400%;
-  animation: gradient-shift 3s ease infinite;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
 /* Hover effects */
 .hover-lift {
   transition: all 0.3s ease;
@@ -95,4 +79,52 @@ body {
 .hover-lift:hover {
   transform: translateY(-5px);
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Reduce animation intensity on mobile */
+  .animate-float {
+    animation: float 8s ease-in-out infinite;
+  }
+  
+  /* Better touch targets */
+  button, .button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent horizontal scroll */
+  body, html {
+    overflow-x: hidden;
+  }
+  
+  /* Better mobile grid */
+  .grid-cols-2 > * {
+    min-width: 0;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  /* Ensure text doesn't get too small */
+  .text-xs { font-size: 0.75rem; }
+  .text-sm { font-size: 0.875rem; }
+  
+  /* Better spacing on very small screens */
+  .space-x-1 > * + * { margin-left: 0.25rem; }
+  .space-x-2 > * + * { margin-left: 0.5rem; }
+  .space-y-2 > * + * { margin-top: 0.5rem; }
+  .space-y-3 > * + * { margin-top: 0.75rem; }
+  
+  /* Force proper button sizing */
+  button {
+    word-wrap: break-word;
+    hyphens: auto;
+  }
 }
